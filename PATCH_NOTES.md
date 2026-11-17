@@ -1,6 +1,11 @@
 # AI Cognitive Core MCP v0.4.0 — Patch Notes (Fase Tes)
 
-> **Status: FASE TES (branch `v0.4.0-test`).** Belum di-install ke lokasi live.
+> **Status: FASE TES (branch `v0.4.0-test`).** Ter-install di lokasi live
+> 17 Nov 2026 ~22:50 WIB — migrasi DB live OK (backup `.bak-v0.3.1` dibuat),
+> 29/29 tes lolos, smoke test live OK (perceive/commit/get_status/sleep).
+> Perbaikan tema mimpi menyusul di commit 6ad71b5: tema menolak artefak
+> teknis/nama file, episode teknis dilewati sebagai sumber mimpi, kandidat
+> mimpi diperluas ke 20 episode teratas.
 > Rencana implementasi dari Sol (gpt-6.1-sol) — lihat file rencana v0.4.0 &
 > laporan ekspansi di workspace Aya. Semua parameter baru terpusat di
 > `src/ai_cognitive_core/config.py` agar mudah di-tune selama tes.
