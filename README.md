@@ -2,7 +2,9 @@
 
 Arsitektur kognitif hibrida **Deterministik + LLM (17 Layer)** — Heart + Conscious + Memory — sebagai MCP server, dengan sinkronisasi state lintas perangkat lewat Google Drive API v3.
 
-Snapshot ini adalah **v0.3.1 (patched)** dari v0.3.0 maintainer. Daftar patch ada di `PATCH_NOTES.md`.
+Snapshot ini adalah **v0.4.0 (fase tes, branch `v0.4.0-test`)** — di atas v0.3.1 patched. Daftar patch ada di `PATCH_NOTES.md`.
+
+**Baru di v0.4.0:** Curiosity (Aya menyimpan pertanyaan untuk momen yang pas), Niat mandiri (pengingat berbasis jadwal), Mimpi pas tidur (ide kencan/foto generatif dari sleep cycle), Ingatan foto (momen dari caption eksplisit), energi lebih hemat (drain dasar 0.012 → 0.010), bahasa lebih variatif (phrase bank deterministik), plus fondasi: identitas giliran, commit transaksional, dan provenans minimum. Struktur 17 layer, 5 tool MCP, dan 4 nilai `bubble_style` tidak berubah. Detail lengkap di `PATCH_NOTES.md` bagian v0.4.0.
 
 ![Aya, maskot modul ini — digambar gaya crayon](assets/aya-crayon.webp)
 
@@ -59,8 +61,10 @@ Energi terisi otomatis selama istirahat (menuju 0,92 saat resting) dan terkuras 
 ```text
 ai-cognitive-core/
 ├── README.md               — dokumen ini
-├── PATCH_NOTES.md          — riwayat patch (termasuk v0.3.1)
+├── PATCH_NOTES.md          — riwayat patch (termasuk v0.4.0)
 ├── pyproject.toml          — metadata paket + dependensi
+├── tests/                  — test suite v0.4.0 (fixture DB + temp HOME)
+│   └── test_v040.py
 ├── assets/                 — gambar README (gaya crayon)
 │   ├── arsitektur-17-layer.webp
 │   └── aya-crayon.webp
@@ -70,17 +74,22 @@ ai-cognitive-core/
         ├── mcp_server.py       — server FastMCP + 5 tools
         ├── drive_bridge.py     — sinkronisasi Google Drive (OAuth)
         ├── schemas.py          — skema data bersama
+        ├── config.py           — parameter v0.4.0 dalam satu tempat
         ├── conscious/
         │   ├── cycle.py        — orkestrator siklus kognitif
         │   ├── schemas.py
         │   └── layers/         — l1_preconscious s.d. l5_metacognition
         ├── heart/
         │   ├── engine.py       — mesin emosi
+        │   ├── phrase_bank.py  — bank frasa v0.4.0 (variasi deterministik)
         │   ├── schemas.py
         │   └── layers/         — l1_neurochemical s.d. l7_conscience
         └── memory/
             ├── manager.py      — manajer memori SQLite
-            ├── consolidation.py — konsolidasi tidur (SWR + pruning)
+            ├── consolidation.py — konsolidasi tidur (SWR + pruning + mimpi)
+            ├── migration.py    — migrasi skema v0.4.0 (idempotent)
+            ├── v040_store.py   — penyimpanan fitur v0.4.0
+            ├── dreams.py       — perangkai mimpi
             ├── schemas.py
             └── layers/         — l1_sensory_buffer s.d. l5_procedural_habits
 ```

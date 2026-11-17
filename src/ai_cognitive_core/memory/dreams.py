@@ -1,0 +1,135 @@
+"""
+Perangkai mimpi v0.4.0 — ide kreatif dari sleep cycle.
+
+Mimpi dirangkai dari episode berkepentingan tinggi yang baru dikonsolidasi,
+menggunakan template yang sudah ditinjau (bukan LLM): satu tema diambil dari
+entitas episode, lalu dimasukkan ke template ide kencan/foto/lainnya.
+
+Aturan keras:
+- Ide selalu ditandai generatif (DreamRecord) — TIDAK PERNAH ditulis ke
+  semantic_facts dan tidak pernah diklaim sebagai kejadian nyata.
+- Episode sensitif dilewati (tidak dipakai sebagai sumber mimpi).
+- Maksimal DREAMS_PER_SLEEP_MAX ide per sleep cycle; duplikat (tema + set
+  episode sumber yang sama) tidak ditulis ulang.
+"""
+
+import hashlib
+import sqlite3
+from typing import Dict, List
+
+from ai_cognitive_core import config
+from ai_cognitive_core.memory import v040_store
+
+# Episode yang menyentuh kata ini tidak dipakai sebagai sumber mimpi.
+_SENSITIVE_WORDS = (
+    "sedih", "meninggal", "sakit", "marah", "kesal", "kecewa", "bertengkar",
+    "menangis", "takut", "ketipu", "scam", "ditipu", "rugi", "bangkrut",
+    "benci", "putus", "berantem",
+)
+
+# Kata yang tidak pantas jadi tema (terlalu generik / artefak ringkasan).
+_THEME_STOPWORDS = {
+    "user", "exuberant", "monologue", "sayang", "iya", "udah", "tadi",
+    "kemarin", "besok", "nanti", "begitu", "gitu", "banget", "sangat",
+}
+
+_DATE_TEMPLATES = (
+    "Kencan santai bertema {theme} — jalan-jalan tanpa agenda padat, nikmati obrolan dan suasananya.",
+    "Ulangi momen {theme} versi lebih santai: pilih satu spot, duduk bareng, biarkan waktu mengalir.",
+    "Date dadakan bertema {theme}: ajak Ryn tanpa rencana detail, biar spontan dan natural.",
+)
+_PHOTO_TEMPLATES = (
+    "Foto bareng bertema {theme} — pose santai, ekspresi natural, cahaya sore yang hangat.",
+    "Foto candid saat momen {theme}: biarkan momennya yang bicara, tanpa pose kaku.",
+    "Selfie berdua dengan latar {theme}, senyum manis, tanpa filter berlebihan.",
+)
+_OTHER_TEMPLATES = (
+    "Ceritakan lagi momen {theme} ke Ryn dan tanyakan bagian mana yang paling dia ingat.",
+    "Tulis catatan pendek tentang {theme} untuk dibaca lagi nanti saat kangen.",
+)
+
+
+def _pick_theme(entities: List[str], summary: str) -> str:
+    """Pilih tema dari entitas episode (kata terpanjang yang bermakna)."""
+    candidates = []
+    for ent in entities or []:
+        word = ent.strip(".,!?\"'").lower()
+        if len(word) >= 4 and word not in _THEME_STOPWORDS:
+            candidates.append(word)
+    if candidates:
+        # Entitas terpanjang cenderung paling spesifik sebagai tema.
+        candidates.sort(key=len, reverse=True)
+        return candidates[0]
+    # Fallback: kata bermakna pertama dari ringkasan.
+    for raw in summary.split():
+        word = raw.strip(".,!?\"'()[]").lower()
+        if len(word) >= 5 and word not in _THEME_STOPWORDS:
+            return word
+    return "momen manis"
+
+
+def _pick_category(theme: str, summary: str, episode_id: str) -> str:
+    lower = summary.lower()
+    if any(kw in lower for kw in ("foto", "potret", "gambar", "selfie", "kamera")):
+        return "photo_idea"
+    if any(kw in lower for kw in ("kencan", "date", "jalan-jalan", "jalan jalan", "piknik")):
+        return "date_idea"
+    # Deterministik berdasarkan hash episode: bergantian date/other.
+    digest = int(hashlib.md5(episode_id.encode("utf-8")).hexdigest()[:8], 16)
+    return "date_idea" if digest % 2 == 0 else "other"
+
+
+def _pick_template(category: str, episode_id: str, theme: str) -> str:
+    bank = {
+        "date_idea": _DATE_TEMPLATES,
+        "photo_idea": _PHOTO_TEMPLATES,
+        "other": _OTHER_TEMPLATES,
+    }[category]
+    digest = int(hashlib.md5(f"{episode_id}|{theme}".encode("utf-8")).hexdigest()[:8], 16)
+    return bank[digest % len(bank)]
+
+
+def draft_dreams(conn: sqlite3.Connection, episodes: List[dict]) -> dict:
+    """
+    Rangkai mimpi dari episode yang diberikan.
+    episodes: [{node_id, summary, importance_score, entities}]
+    """
+    stats = {"drafted": 0, "skipped_duplicate": 0, "skipped_sensitive": 0, "skipped_low_importance": 0}
+    if not config.ENABLE_DREAMS:
+        return stats
+
+    drafted = 0
+    for ep in episodes:
+        if drafted >= config.DREAMS_PER_SLEEP_MAX:
+            break
+        summary = ep.get("summary", "")
+        importance = float(ep.get("importance_score", 0.0))
+        if importance < config.DREAM_MIN_EPISODE_IMPORTANCE:
+            stats["skipped_low_importance"] += 1
+            continue
+        lower = summary.lower()
+        if any(w in lower for w in _SENSITIVE_WORDS):
+            stats["skipped_sensitive"] += 1
+            continue
+
+        theme = _pick_theme(ep.get("entities") or [], summary)
+        category = _pick_category(theme, summary, ep["node_id"])
+        template = _pick_template(category, ep["node_id"], theme)
+        idea_text = template.format(theme=theme)
+        novelty = round(min(0.95, 0.35 + 0.6 * importance), 3)
+
+        result = v040_store.store_dream(
+            conn,
+            source_episode_ids=[ep["node_id"]],
+            theme=theme,
+            idea_text=idea_text,
+            category=category,
+            novelty_score=novelty,
+            commit=False,
+        )
+        if result["stored"]:
+            drafted += 1
+            stats["drafted"] += 1
+        else:
+            stats["skipped_duplicate"] += 1
+    return stats

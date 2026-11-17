@@ -2,7 +2,8 @@ import json
 import sqlite3
 import uuid
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
+from ai_cognitive_core import config
 from ai_cognitive_core.schemas import (
     EpisodicNode,
     PADVector,
@@ -17,6 +18,7 @@ from ai_cognitive_core.memory.layers.l3_episodic_graph import (
     run_bounded_ppr,
 )
 from ai_cognitive_core.memory.layers.l4_semantic_schema import retrieve_semantic_facts
+from ai_cognitive_core.memory import migration, v040_store
 
 
 class MemoryManager:
@@ -73,6 +75,12 @@ class MemoryManager:
         )
         conn.commit()
         conn.close()
+        # v0.4.0: migrasi idempotent (tabel baru + kolom provenans + backup
+        # <db>.bak-v0.3.1 bila belum ada). Aman dijalankan berulang.
+        migration.migrate_db(self.db_path)
+
+    def _connect(self) -> sqlite3.Connection:
+        return sqlite3.connect(str(self.db_path))
 
     def ingest_sensory_input(self, content: str, role: str = "user") -> WorkingChunk:
         chunk = WorkingChunk(
@@ -86,7 +94,9 @@ class MemoryManager:
 
     def retrieve_context(self, query_text: str, pad_now: PADVector) -> Tuple[List[EpisodicNode], List[SemanticFact], float]:
         conn = sqlite3.connect(str(self.db_path))
-        episodes, ca1_mismatch = run_bounded_ppr(conn, query_text, pad_now, top_k=3)
+        episodes, ca1_mismatch = run_bounded_ppr(
+            conn, query_text, pad_now, top_k=config.RETRIEVAL_TOP_K_EPISODES
+        )
 
         for ep in episodes:
             conn.execute(
@@ -94,11 +104,18 @@ class MemoryManager:
                 (ep.node_id,),
             )
         conn.commit()
-        facts = retrieve_semantic_facts(conn, limit=4)
+        facts = retrieve_semantic_facts(conn, limit=config.RETRIEVAL_TOP_K_FACTS)
         conn.close()
         return episodes, facts, ca1_mismatch
 
-    def encode_episode(self, summary: str, pad_vector: PADVector, entities: List[str] | None = None) -> EpisodicNode:
+    def _insert_episode(
+        self,
+        conn: sqlite3.Connection,
+        summary: str,
+        pad_vector: PADVector,
+        entities: List[str] | None = None,
+    ) -> EpisodicNode:
+        """Sisipkan episode pada koneksi yang diberikan (tanpa commit sendiri)."""
         entities = entities or [w.strip(".,!?").lower() for w in summary.split() if len(w) > 4][:6]
         vec = deterministic_embed(summary)
         arousal_weight = round(min(1.0, 0.4 + 0.6 * abs(pad_vector.A)), 4)
@@ -113,7 +130,6 @@ class MemoryManager:
             importance_score=importance,
         )
 
-        conn = sqlite3.connect(str(self.db_path))
         if self._last_node_id:
             conn.execute(
                 "UPDATE episodic_nodes SET next_node_id = ? WHERE node_id = ?",
@@ -144,7 +160,207 @@ class MemoryManager:
             "UPDATE episodic_nodes SET stability_status = 'STABLE', pad_json = ? WHERE stability_status = 'LABILE'",
             (pad_vector.model_dump_json(),),
         )
-        conn.commit()
-        conn.close()
         self._last_node_id = node.node_id
         return node
+
+    def encode_episode(self, summary: str, pad_vector: PADVector, entities: List[str] | None = None) -> EpisodicNode:
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            node = self._insert_episode(conn, summary, pad_vector, entities)
+            conn.commit()
+        finally:
+            conn.close()
+        return node
+
+    # ------------------------------------------------------------------
+    # v0.4.0 — penyimpanan commit transaksional (fondasi laporan ekspansi §4)
+    # Episode + penanda giliran + aksi v0.4.0 tersimpan dalam SATU transaksi:
+    # gagal di tengah jalan = tidak ada yang tersimpan setengah-setengah.
+    # ------------------------------------------------------------------
+
+    def commit_turn_bundle(
+        self,
+        summary: str,
+        pad_vector: PADVector,
+        turn_id: Optional[str] = None,
+        actions: Optional[dict] = None,
+    ) -> dict:
+        """Simpan satu giliran commit secara transaksional.
+
+        actions (semua opsional):
+          propose_question: dict(text, topic, priority, context_tags, expires_at)
+          create_reminder: dict(text, due_at, trigger_condition, priority, repeat_policy)
+          photo_moment: dict(caption, people, place, event_tags, source_ref,
+                             consent_status, timestamp)
+          curiosity_asked_id, dismiss_curiosity_id, dismiss_dream_id: str
+          reminder_id + reminder_action ("complete"|"snooze"|"dismiss")
+          snooze_until: str (ISO, untuk snooze)
+          photo_moment_id + photo_moment_action ("correct"|"delete")
+          photo_moment_correction: dict
+        """
+        actions = actions or {}
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            if turn_id and v040_store.is_turn_committed(conn, turn_id):
+                marker = v040_store.get_turn_marker(conn, turn_id)
+                return {
+                    "duplicate": True,
+                    "episode_id": marker["episode_id"] if marker else None,
+                    "outcomes": {},
+                }
+
+            node = self._insert_episode(conn, summary, pad_vector)
+            outcomes: dict = {}
+
+            if turn_id:
+                v040_store.mark_turn_committed(conn, turn_id, node.node_id, commit=False)
+
+            q = actions.get("propose_question")
+            if isinstance(q, dict) and q.get("text"):
+                outcomes["curiosity"] = v040_store.propose_question(
+                    conn,
+                    text=q.get("text", ""),
+                    topic=q.get("topic", ""),
+                    priority=float(q.get("priority", 0.5)),
+                    context_tags=q.get("context_tags"),
+                    expires_at=q.get("expires_at"),
+                    source=q.get("source", "supervisor"),
+                    commit=False,
+                )
+
+            r = actions.get("create_reminder")
+            if isinstance(r, dict) and r.get("text"):
+                outcomes["reminder"] = v040_store.create_reminder(
+                    conn,
+                    text=r.get("text", ""),
+                    due_at=r.get("due_at"),
+                    trigger_condition=r.get("trigger_condition"),
+                    source=r.get("source", "supervisor"),
+                    priority=float(r.get("priority", 0.5)),
+                    repeat_policy=r.get("repeat_policy", "none"),
+                    commit=False,
+                )
+
+            pm = actions.get("photo_moment")
+            if isinstance(pm, dict) and pm.get("caption"):
+                linked = list(pm.get("linked_episode_ids") or []) + [node.node_id]
+                outcomes["photo_moment"] = v040_store.store_photo_moment(
+                    conn,
+                    caption=pm.get("caption", ""),
+                    people=pm.get("people"),
+                    place=pm.get("place", ""),
+                    event_tags=pm.get("event_tags"),
+                    source_ref=pm.get("source_ref", ""),
+                    consent_status=pm.get("consent_status", "unknown"),
+                    timestamp=pm.get("timestamp"),
+                    linked_episode_ids=linked,
+                    commit=False,
+                )
+
+            if actions.get("curiosity_asked_id"):
+                outcomes["curiosity_asked"] = v040_store.mark_question_asked(
+                    conn, actions["curiosity_asked_id"], commit=False
+                )
+            if actions.get("dismiss_curiosity_id"):
+                outcomes["curiosity_dismissed"] = v040_store.dismiss_question(
+                    conn, actions["dismiss_curiosity_id"], commit=False
+                )
+            if actions.get("dismiss_dream_id"):
+                outcomes["dream_dismissed"] = v040_store.dismiss_dream(
+                    conn, actions["dismiss_dream_id"], commit=False
+                )
+
+            rid = actions.get("reminder_id")
+            raction = actions.get("reminder_action")
+            if rid and raction:
+                outcomes["reminder_action"] = v040_store.apply_reminder_action(
+                    conn, rid, raction,
+                    snooze_until=actions.get("snooze_until"),
+                    commit=False,
+                )
+
+            pmid = actions.get("photo_moment_id")
+            pmaction = actions.get("photo_moment_action")
+            if pmid and pmaction == "delete":
+                outcomes["photo_moment_deleted"] = v040_store.delete_photo_moment(
+                    conn, pmid, commit=False
+                )
+            elif pmid and pmaction == "correct" and isinstance(actions.get("photo_moment_correction"), dict):
+                outcomes["photo_moment_corrected"] = v040_store.correct_photo_moment(
+                    conn, pmid, commit=False, **actions["photo_moment_correction"]
+                )
+
+            conn.commit()
+            return {"duplicate": False, "episode_id": node.node_id, "outcomes": outcomes}
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    # ------------------------------------------------------------------
+    # v0.4.0 — delegasi ke v040_store (satu koneksi per panggilan)
+    # ------------------------------------------------------------------
+
+    def get_turn_marker(self, turn_id: str) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            return v040_store.get_turn_marker(conn, turn_id)
+        finally:
+            conn.close()
+
+    def mark_turn_perceived(self, turn_id: str, drained: bool) -> None:
+        conn = self._connect()
+        try:
+            v040_store.mark_turn_perceived(conn, turn_id, drained)
+        finally:
+            conn.close()
+
+    def select_curiosity_prompt(self, **kwargs) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            return v040_store.select_curiosity_prompt(conn, **kwargs)
+        finally:
+            conn.close()
+
+    def select_due_reminder(self, **kwargs) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            return v040_store.select_due_reminder(conn, **kwargs)
+        finally:
+            conn.close()
+
+    def select_dream_to_surface(self) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            return v040_store.select_dream_to_surface(conn)
+        finally:
+            conn.close()
+
+    def select_photo_reference(self, **kwargs) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            return v040_store.select_photo_reference(conn, **kwargs)
+        finally:
+            conn.close()
+
+    def record_energy_telemetry(self, **kwargs) -> None:
+        conn = self._connect()
+        try:
+            v040_store.record_telemetry(conn, **kwargs)
+        finally:
+            conn.close()
+
+    def telemetry_summary(self) -> dict:
+        conn = self._connect()
+        try:
+            return v040_store.telemetry_summary(conn)
+        finally:
+            conn.close()
+
+    def v040_counts(self) -> dict:
+        conn = self._connect()
+        try:
+            return v040_store.v040_counts(conn)
+        finally:
+            conn.close()

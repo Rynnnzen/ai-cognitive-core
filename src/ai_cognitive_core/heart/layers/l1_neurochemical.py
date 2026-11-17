@@ -1,4 +1,5 @@
 import math
+from ai_cognitive_core import config
 from ai_cognitive_core.schemas import NeuroState, StimulusAppraisal
 
 # Konstanta peluruhan spesifik per hormon (detik^-1)
@@ -83,9 +84,14 @@ def update_neurochemistry(
     noradrenaline = min(1.0, max(0.0, raw_nor + 0.10 * (base.noradrenaline - raw_nor)))
 
     if drain_energy:
-        # Kuras energi proporsional dengan intensitas emosi & stres (hanya 1x per turn)
-        drain = 0.012 * (1.0 + 0.7 * noradrenaline + 0.6 * cortisol)
-        energy = min(1.0, max(0.05, neuro.energy - drain))
+        # Kuras energi proporsional dengan intensitas emosi & stres (hanya 1x per turn).
+        # v0.4.0 fase tes: koefisien dasar 0.012 -> 0.010 (lihat config.py);
+        # skala noradrenaline/cortisol & lantai 0.05 tidak berubah.
+        drain = config.ENERGY_BASE_DRAIN * (
+            1.0 + config.ENERGY_NORADRENALINE_COEF * noradrenaline
+            + config.ENERGY_CORTISOL_COEF * cortisol
+        )
+        energy = min(1.0, max(config.ENERGY_FLOOR, neuro.energy - drain))
     else:
         energy = neuro.energy
 
