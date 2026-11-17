@@ -1,0 +1,24 @@
+# File pribadi / state — JANGAN PERNAH di-commit ke repo ini
+token.json
+client_secret.json
+service_account.json
+heart_state.json
+cognitive_memory.db
+*.db
+*.sqlite3
+.ai_cognitive_state/
+credentials*.json
+.env
+
+# Artefak build Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+*.egg
+.venv/
+venv/
+
+# Arsip zip (distribusi lewat Drive, bukan repo)
+*.zip
