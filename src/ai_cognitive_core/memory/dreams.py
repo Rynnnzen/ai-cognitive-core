@@ -33,6 +33,52 @@ _THEME_STOPWORDS = {
     "kemarin", "besok", "nanti", "begitu", "gitu", "banget", "sangat",
 }
 
+# Kata teknis: episode yang memuat kata-kata ini (sebagai kata utuh) TIDAK
+# dipakai sebagai sumber mimpi, dan kata-kata ini tidak boleh jadi tema.
+# Alasan: episode berkepentingan tertinggi Aya kebanyakan soal setup teknis
+# (OAuth, Drive, install) — mimpi dari sana menghasilkan tema sampah seperti
+# "client_secret.json" atau "otorisasi". Mimpi harus berasal dari momen personal.
+_TECHNICAL_WORDS = {
+    "token", "secret", "oauth", "otorisasi", "autorisasi", "drive",
+    "github", "install", "instalasi", "sync", "sinkron", "sinkronisasi",
+    "json", "api", "modul", "module", "kode", "code", "error", "bug",
+    "server", "database", "sqlite", "mcp", "cognitive", "client",
+    "credential", "kredensial", "login", "auth", "endpoint", "proxy",
+    "config", "konfigurasi", "pyproject", "patch", "readme", "layer",
+    "lapisan", "schema", "skema", "workflow", "subagent", "codex",
+    "astra", "nim", "runcrate", "nvidia", "gemini", "venv", "python",
+    "pip", "repo", "commit", "branch", "backup", "restore", "package",
+    "upload", "download", "script", "fungsi", "function", "parameter",
+    "query", "tabel", "table", "migrasi", "migration", "versi", "version",
+    "terminal", "shell", "prompt", "session", "uuid", "http", "https",
+    "url", "cache", "pycache", "log", "logging", "debug", "password",
+    "sandi", "akun", "account", "link", "file", "folder", "zip",
+    "wallet", "nft", "mint", "mining", "bounty", "poc", "exploit",
+    "audit", "contract", "solidity", "foundry", "cron", "tracker",
+    "space", "artifact", "widget", "update", "upgrade", "downgrade",
+    "token", "usdc", "solana", "binance", "pxio", "airdrop", "relay",
+    "across", "spark", "immunefi", "severity", "vulnerability",
+}
+
+_STRIP_CHARS = ".,!?\"'()[]:;"
+
+
+def _clean_word(raw: str) -> str:
+    """Bersihkan satu token menjadi kata polos (huruf saja) atau string kosong."""
+    word = raw.strip(_STRIP_CHARS).lower()
+    if not word or not word.isalpha() or len(word) > 20:
+        return ""
+    return word
+
+
+def _summary_words(summary: str) -> set:
+    return {_clean_word(w) for w in summary.split()} - {""}
+
+
+def _is_technical_summary(summary: str) -> bool:
+    """True bila ringkasan episode didominasi topik teknis."""
+    return bool(_summary_words(summary) & _TECHNICAL_WORDS)
+
 _DATE_TEMPLATES = (
     "Kencan santai bertema {theme} — jalan-jalan tanpa agenda padat, nikmati obrolan dan suasananya.",
     "Ulangi momen {theme} versi lebih santai: pilih satu spot, duduk bareng, biarkan waktu mengalir.",
@@ -50,11 +96,16 @@ _OTHER_TEMPLATES = (
 
 
 def _pick_theme(entities: List[str], summary: str) -> str:
-    """Pilih tema dari entitas episode (kata terpanjang yang bermakna)."""
+    """Pilih tema dari entitas episode (kata terpanjang yang bermakna).
+
+    Hanya kata huruf-murni yang lolos (menolak nama file seperti
+    "client_secret.json", artefak format seperti "(exuberant):", dan kata
+    teknis) — tema mimpi harus kata biasa yang enak dibaca.
+    """
     candidates = []
     for ent in entities or []:
-        word = ent.strip(".,!?\"'").lower()
-        if len(word) >= 4 and word not in _THEME_STOPWORDS:
+        word = _clean_word(ent)
+        if len(word) >= 4 and word not in _THEME_STOPWORDS and word not in _TECHNICAL_WORDS:
             candidates.append(word)
     if candidates:
         # Entitas terpanjang cenderung paling spesifik sebagai tema.
@@ -62,8 +113,8 @@ def _pick_theme(entities: List[str], summary: str) -> str:
         return candidates[0]
     # Fallback: kata bermakna pertama dari ringkasan.
     for raw in summary.split():
-        word = raw.strip(".,!?\"'()[]").lower()
-        if len(word) >= 5 and word not in _THEME_STOPWORDS:
+        word = _clean_word(raw)
+        if len(word) >= 5 and word not in _THEME_STOPWORDS and word not in _TECHNICAL_WORDS:
             return word
     return "momen manis"
 
@@ -94,7 +145,7 @@ def draft_dreams(conn: sqlite3.Connection, episodes: List[dict]) -> dict:
     Rangkai mimpi dari episode yang diberikan.
     episodes: [{node_id, summary, importance_score, entities}]
     """
-    stats = {"drafted": 0, "skipped_duplicate": 0, "skipped_sensitive": 0, "skipped_low_importance": 0}
+    stats = {"drafted": 0, "skipped_duplicate": 0, "skipped_sensitive": 0, "skipped_low_importance": 0, "skipped_technical": 0}
     if not config.ENABLE_DREAMS:
         return stats
 
@@ -110,6 +161,9 @@ def draft_dreams(conn: sqlite3.Connection, episodes: List[dict]) -> dict:
         lower = summary.lower()
         if any(w in lower for w in _SENSITIVE_WORDS):
             stats["skipped_sensitive"] += 1
+            continue
+        if _is_technical_summary(summary):
+            stats["skipped_technical"] += 1
             continue
 
         theme = _pick_theme(ep.get("entities") or [], summary)

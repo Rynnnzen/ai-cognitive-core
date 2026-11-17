@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from ai_cognitive_core import config
 from ai_cognitive_core.schemas import utc_now_iso
 from ai_cognitive_core.memory import migration, v040_store
 from ai_cognitive_core.memory import dreams as dreams_mod
@@ -52,7 +53,21 @@ def run_sleep_consolidation(db_path: str) -> dict:
     cur.execute("DELETE FROM episodic_nodes WHERE importance_score < 0.12 AND access_count <= 1")
     pruned = cur.rowcount
 
-    # v0.4.0: rangkai mimpi dari episode berkepentingan tinggi (generatif).
+    # v0.4.0: rangkai mimpi dari kumpulan kandidat yang LEBIH LUAS dari 5 episode
+    # replay (yang isinya didominasi episode setup teknis berkepentingan 1.0).
+    # Kandidat mimpi: 20 episode teratas dengan importance >= ambang mimpi;
+    # draft_dreams sendiri yang menyaring sensitif/teknis dan membatasi 3 ide.
+    cur.execute(
+        """
+        SELECT node_id, summary, importance_score, entities_json
+        FROM episodic_nodes
+        WHERE importance_score >= ?
+        ORDER BY importance_score DESC
+        LIMIT 20
+        """,
+        (config.DREAM_MIN_EPISODE_IMPORTANCE,),
+    )
+    dream_rows = cur.fetchall()
     dream_episodes = [
         {
             "node_id": node_id,
@@ -60,7 +75,7 @@ def run_sleep_consolidation(db_path: str) -> dict:
             "importance_score": imp,
             "entities": json.loads(entities_json) if entities_json else [],
         }
-        for node_id, summary, imp, acc, entities_json in high_episodes
+        for node_id, summary, imp, entities_json in dream_rows
     ]
     dream_stats = dreams_mod.draft_dreams(conn, dream_episodes)
 
@@ -80,6 +95,7 @@ def run_sleep_consolidation(db_path: str) -> dict:
         "dreams_drafted": dream_stats["drafted"],
         "dreams_skipped_duplicate": dream_stats["skipped_duplicate"],
         "dreams_skipped_sensitive": dream_stats["skipped_sensitive"],
+        "dreams_skipped_technical": dream_stats.get("skipped_technical", 0),
         "reminders_expired": reminder_sweep["expired"],
         "reminders_rescheduled": reminder_sweep["rescheduled"],
     }
