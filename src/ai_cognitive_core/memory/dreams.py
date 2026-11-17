@@ -120,8 +120,8 @@ def _pick_theme(entities: List[str], summary: str) -> str:
     """Pilih tema HANYA dari _THEME_CONCEPTS (yang terpanjang = paling spesifik).
 
     Bila tidak ada konsep yang cocok di entitas maupun ringkasan, temanya
-    "momen manis" — generik tapi manis, jauh lebih baik daripada tema sampah
-    dari token chat mentah.
+    "kita berdua" — generik tapi manis dan cocok di semua template (beda dengan
+    "momen manis" yang jadi dobel: "momen momen manis").
     """
     matches = []
     for ent in entities or []:
@@ -136,7 +136,7 @@ def _pick_theme(entities: List[str], summary: str) -> str:
     if matches:
         matches.sort(key=len, reverse=True)
         return matches[0]
-    return "momen manis"
+    return "kita berdua"
 
 
 def _pick_category(theme: str, summary: str, episode_id: str) -> str:
@@ -169,6 +169,15 @@ def draft_dreams(conn: sqlite3.Connection, episodes: List[dict]) -> dict:
     if not config.ENABLE_DREAMS:
         return stats
 
+    # Dedup berdasarkan TEKS IDE juga (bukan hanya tema + episode sumber):
+    # tanpa ini, beberapa episode personal yang sama-sama jatuh ke tema
+    # fallback bisa menghasilkan 3 mimpi dengan teks yang identik.
+    try:
+        cur = conn.execute("SELECT idea_text FROM dream_records WHERE status = 'stored'")
+        seen_ideas = {row[0] for row in cur.fetchall()}
+    except sqlite3.Error:
+        seen_ideas = set()
+
     drafted = 0
     for ep in episodes:
         if drafted >= config.DREAMS_PER_SLEEP_MAX:
@@ -190,6 +199,9 @@ def draft_dreams(conn: sqlite3.Connection, episodes: List[dict]) -> dict:
         category = _pick_category(theme, summary, ep["node_id"])
         template = _pick_template(category, ep["node_id"], theme)
         idea_text = template.format(theme=theme)
+        if idea_text in seen_ideas:
+            stats["skipped_duplicate"] += 1
+            continue
         novelty = round(min(0.95, 0.35 + 0.6 * importance), 3)
 
         result = v040_store.store_dream(
@@ -203,6 +215,7 @@ def draft_dreams(conn: sqlite3.Connection, episodes: List[dict]) -> dict:
         )
         if result["stored"]:
             drafted += 1
+            seen_ideas.add(idea_text)
             stats["drafted"] += 1
         else:
             stats["skipped_duplicate"] += 1
