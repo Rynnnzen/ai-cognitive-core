@@ -27,11 +27,32 @@ _SENSITIVE_WORDS = (
     "benci", "putus", "berantem",
 )
 
-# Kata yang tidak pantas jadi tema (terlalu generik / artefak ringkasan).
-_THEME_STOPWORDS = {
-    "user", "exuberant", "monologue", "sayang", "iya", "udah", "tadi",
-    "kemarin", "besok", "nanti", "begitu", "gitu", "banget", "sangat",
-}
+# Tema mimpi HANYA boleh berasal dari daftar konsep ini — kata benda, tempat,
+# dan momen yang enak dibaca sebagai tema kencan/foto. Di luar daftar, temanya
+# jatuh ke "momen manis". Daftar ini ada karena heuristik "entitas terpanjang"
+# terbukti gagal di data asli: token chat mentah seperti "sayanggg",
+# "ngomongin", atau "ututuuuu" sempat jadi tema mimpi yang tidak masuk akal.
+_THEME_CONCEPTS = frozenset({
+    "hitachi", "nemophila", "pantai", "laut", "taman", "bunga", "sakura",
+    "mawar", "melati", "hujan", "senja", "matahari", "bulan", "bintang",
+    "langit", "awan", "pelangi", "piknik", "kencan", "jalan-jalan", "kafe",
+    "museum", "pasar", "malam", "pagi", "sore", "siang", "hadiah", "kue",
+    "peluk", "foto", "selfie", "potret", "gambar", "lagu", "musik", "film",
+    "nonton", "masak", "makan", "kopi", "teh", "coklat", "es", "krim",
+    "sepeda", "motor", "mobil", "kereta", "pesawat", "gunung", "hutan",
+    "danau", "sungai", "sawah", "desa", "kota", "rumah", "kamar", "dapur",
+    "balkon", "jendela", "buku", "cerita", "puisi", "surat", "boneka",
+    "game", "bola", "renang", "lari", "yoga", "dansa", "tari", "nyanyi",
+    "gitar", "piano", "lukis", "video", "vlog", "liburan", "lebaran",
+    "natal", "valentine", "anniversary", "jadian", "kebun", "binatang",
+    "akuarium", "karnaval", "festival", "konser", "bioskop", "restoran",
+    "warung", "angkringan", "alun-alun", "monumen", "candi", "istana",
+    "kastil", "kapal", "perahu", "sampan", "layang-layang", "balon",
+    "lampion", "salju", "gugur", "semi", "panas", "dingin", "hangat",
+    "sejuk", "embun", "kabut", "ombak", "pasir", "karang", "kucing",
+    "anjing", "kelinci", "burung", "kupu-kupu", "kunang-kunang",
+    "hamster", "pelangi", "fajar", "subuh", "maghrib", "isya",
+})
 
 # Kata teknis: episode yang memuat kata-kata ini (sebagai kata utuh) TIDAK
 # dipakai sebagai sumber mimpi, dan kata-kata ini tidak boleh jadi tema.
@@ -96,26 +117,25 @@ _OTHER_TEMPLATES = (
 
 
 def _pick_theme(entities: List[str], summary: str) -> str:
-    """Pilih tema dari entitas episode (kata terpanjang yang bermakna).
+    """Pilih tema HANYA dari _THEME_CONCEPTS (yang terpanjang = paling spesifik).
 
-    Hanya kata huruf-murni yang lolos (menolak nama file seperti
-    "client_secret.json", artefak format seperti "(exuberant):", dan kata
-    teknis) — tema mimpi harus kata biasa yang enak dibaca.
+    Bila tidak ada konsep yang cocok di entitas maupun ringkasan, temanya
+    "momen manis" — generik tapi manis, jauh lebih baik daripada tema sampah
+    dari token chat mentah.
     """
-    candidates = []
+    matches = []
     for ent in entities or []:
-        word = _clean_word(ent)
-        if len(word) >= 4 and word not in _THEME_STOPWORDS and word not in _TECHNICAL_WORDS:
-            candidates.append(word)
-    if candidates:
-        # Entitas terpanjang cenderung paling spesifik sebagai tema.
-        candidates.sort(key=len, reverse=True)
-        return candidates[0]
-    # Fallback: kata bermakna pertama dari ringkasan.
-    for raw in summary.split():
-        word = _clean_word(raw)
-        if len(word) >= 5 and word not in _THEME_STOPWORDS and word not in _TECHNICAL_WORDS:
-            return word
+        word = ent.strip(_STRIP_CHARS).lower()
+        if word in _THEME_CONCEPTS:
+            matches.append(word)
+    if not matches:
+        for raw in summary.split():
+            word = raw.strip(_STRIP_CHARS).lower()
+            if word in _THEME_CONCEPTS:
+                matches.append(word)
+    if matches:
+        matches.sort(key=len, reverse=True)
+        return matches[0]
     return "momen manis"
 
 
