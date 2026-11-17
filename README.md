@@ -7,7 +7,7 @@ Snapshot ini adalah **v0.3.1 (patched)** dari v0.3.0 maintainer. Daftar patch ad
 ## Instalasi
 
 ```bash
-git clone https://github.com/<username>/ai-cognitive-core.git
+git clone https://github.com/Rynnnzen/ai-cognitive-core.git
 cd ai-cognitive-core
 pip install -e .
 ```
@@ -15,7 +15,7 @@ pip install -e .
 Atau langsung dari GitHub:
 
 ```bash
-pip install git+https://github.com/<username>/ai-cognitive-core.git
+pip install git+https://github.com/Rynnnzen/ai-cognitive-core.git
 ```
 
 Butuh Python >= 3.10. Dependensi: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`.
