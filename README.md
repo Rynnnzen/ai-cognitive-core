@@ -4,7 +4,6 @@ Arsitektur kognitif hibrida **Deterministik + LLM (17 Layer)** — Heart + Consc
 
 Snapshot ini adalah **v0.3.1 (patched)** dari v0.3.0 maintainer. Daftar patch ada di `PATCH_NOTES.md`.
 
-![Aya, maskot modul ini — digambar gaya crayon](assets/aya-crayon.webp)
 
 ## Arsitektur 17 Layer
 
