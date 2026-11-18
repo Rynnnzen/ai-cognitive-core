@@ -13,7 +13,7 @@
 
 ## Yang Baru di v0.4.0
 
-### 1. Curiosity — agent menyimpan pertanyaan untuk Ryn
+### 1. Curiosity — agent menyimpan pertanyaan untuk user
 - Tabel baru `curiosity_questions` (`question_id`, `text`, `topic`, `created_at`,
   `priority`, `status` pending/asked/dismissed, `last_offered_at`,
   `context_tags`, `expires_at`, `source`).
@@ -130,7 +130,7 @@
   keempat fitur, energi, enum bubble, audit paket, smoke test JSON-RPC
   MCP) — semuanya memakai fixture DB & temp HOME, tanpa menyentuh live state.
 
-## Pertanyaan Terbuka (dibawa dari rencana Sol — belum dijawab Ryn)
+## Pertanyaan Terbuka (dibawa dari rencana Sol — belum diputuskan)
 - Apakah pertanyaan/niat boleh menyentuh topik sensitif? (v0.4.0: ditunda/dilewati secara konservatif.)
 - Seberapa sering pengingat & curiosity boleh muncul, dan perlu jam tenang? (v0.4.0: cooldown 30/60 menit, tanpa jam tenang.)
 - Mimpi: hanya disimpan, ditampilkan saat diminta, atau boleh ditawarkan? (v0.4.0: ditawarkan 1 per satu saat suasana santai.)

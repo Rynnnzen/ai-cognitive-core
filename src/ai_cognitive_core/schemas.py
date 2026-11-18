@@ -273,7 +273,7 @@ class ProceduralHabit(SerializableModel):
 
 @dataclass
 class CuriosityQuestion(SerializableModel):
-    """Pertanyaan yang disimpan agent untuk Ryn, ditanyakan di momen yang pas."""
+    """Pertanyaan yang disimpan agent untuk user, ditanyakan di momen yang pas."""
     question_id: str
     text: str
     topic: str = ""

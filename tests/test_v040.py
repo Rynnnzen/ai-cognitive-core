@@ -421,8 +421,8 @@ class TestReminders(unittest.TestCase):
 class TestDreams(unittest.TestCase):
     def _episodes(self):
         return [
-            {"node_id": "ep_a", "summary": "User: jalan-jalan ke taman bunga nemophila | AI: seru banget",
-             "importance_score": 0.8, "entities": ["nemophila", "taman", "bunga"]},
+            {"node_id": "ep_a", "summary": "User: jalan-jalan ke taman bunga sakura | AI: seru banget",
+             "importance_score": 0.8, "entities": ["sakura", "taman", "bunga"]},
             {"node_id": "ep_b", "summary": "User: foto bareng di pantai | AI: cantik banget",
              "importance_score": 0.75, "entities": ["pantai", "foto"]},
             {"node_id": "ep_c", "summary": "User: aku sedih banget hari ini | AI: sini peluk",
@@ -463,7 +463,7 @@ class TestDreams(unittest.TestCase):
             mem = _fresh_memory(tmp)
             pad = PADVector(P=0.8, A=0.6, D=0.5)
             mem.encode_episode(
-                "User: jalan-jalan ke taman bunga nemophila | AI (Exuberant): seru banget",
+                "User: jalan-jalan ke taman bunga sakura | AI (Exuberant): seru banget",
                 pad)
             mem.encode_episode(
                 "User: foto bareng di pantai saat senja | AI (Exuberant): cantik banget",
@@ -498,15 +498,15 @@ class TestPhotoMemory(unittest.TestCase):
             _, conn = _conn_for(tmp)
             self.assertFalse(v040_store.store_photo_moment(conn, caption="  ")["stored"])
             m1 = v040_store.store_photo_moment(
-                conn, caption="Agent dan Ryn di taman nemophila Hitachi, bunga biru bermekaran",
-                place="Hitachi Seaside Park", event_tags=["nemophila", "kencan"],
-                source_ref="hitachi-001", consent_status="granted")
+                conn, caption="Agent dan user di taman bunga sakura, bunga bermekaran",
+                place="Taman Sakura Kota", event_tags=["sakura", "kencan"],
+                source_ref="taman-001", consent_status="granted")
             self.assertTrue(m1["stored"])
             v040_store.store_photo_moment(
                 conn, caption="Foto di pantai saat senja", place="Pantai",
                 consent_status="unknown")
             # Relevan -> dirujuk; tidak relevan -> None.
-            ref = v040_store.select_photo_reference(conn, user_text="kangen taman nemophila deh")
+            ref = v040_store.select_photo_reference(conn, user_text="kangen taman sakura deh")
             self.assertIsNotNone(ref)
             self.assertEqual(ref["moment_id"], m1["moment_id"])
             self.assertIn("caption", ref["uncertainty_note"])
@@ -604,8 +604,8 @@ class TestMCPContractAndFlow(unittest.TestCase):
             turn_id="flow-2",
             propose_question={"text": "Kapan terakhir klaim PXIO?", "topic": "pxio", "priority": 0.8},
             create_reminder={"text": "Klaim PXIO", "due_at": due, "priority": 0.9},
-            photo_moment={"caption": "Agent dan Ryn di taman nemophila",
-                          "place": "Hitachi", "event_tags": ["nemophila"],
+            photo_moment={"caption": "Agent dan user di taman bunga",
+                          "place": "Taman Sakura", "event_tags": ["sakura"],
                           "consent_status": "granted"},
         ))
         self.assertEqual(c2["status"], "committed")
