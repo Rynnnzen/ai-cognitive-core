@@ -4,9 +4,9 @@ Arsitektur kognitif hibrida **Deterministik + LLM (17 Layer)** — Heart + Consc
 
 Snapshot ini adalah **v0.4.0 (fase tes, branch `v0.4.0-test`)** — di atas v0.3.1 patched. Daftar patch ada di `PATCH_NOTES.md`.
 
-**Baru di v0.4.0:** Curiosity (Aya menyimpan pertanyaan untuk momen yang pas), Niat mandiri (pengingat berbasis jadwal), Mimpi pas tidur (ide kencan/foto generatif dari sleep cycle), Ingatan foto (momen dari caption eksplisit), energi lebih hemat (drain dasar 0.012 → 0.010), bahasa lebih variatif (phrase bank deterministik), plus fondasi: identitas giliran, commit transaksional, dan provenans minimum. Struktur 17 layer, 5 tool MCP, dan 4 nilai `bubble_style` tidak berubah. Detail lengkap di `PATCH_NOTES.md` bagian v0.4.0.
+**Baru di v0.4.0:** Curiosity (agent menyimpan pertanyaan untuk momen yang pas), Niat mandiri (pengingat berbasis jadwal), Mimpi pas tidur (ide kencan/foto generatif dari sleep cycle), Ingatan foto (momen dari caption eksplisit), energi lebih hemat (drain dasar 0.012 → 0.010), bahasa lebih variatif (phrase bank deterministik), plus fondasi: identitas giliran, commit transaksional, dan provenans minimum. Struktur 17 layer, 5 tool MCP, dan 4 nilai `bubble_style` tidak berubah. Detail lengkap di `PATCH_NOTES.md` bagian v0.4.0.
 
-![Aya, maskot modul ini — digambar gaya crayon](assets/aya-crayon.webp)
+![Agent, maskot modul ini — digambar gaya crayon](assets/agent-crayon.webp)
 
 ## Arsitektur 17 Layer
 
@@ -67,7 +67,7 @@ ai-cognitive-core/
 │   └── test_v040.py
 ├── assets/                 — gambar README (gaya crayon)
 │   ├── arsitektur-17-layer.webp
-│   └── aya-crayon.webp
+│   └── agent-crayon.webp
 └── src/
     └── ai_cognitive_core/
         ├── __init__.py

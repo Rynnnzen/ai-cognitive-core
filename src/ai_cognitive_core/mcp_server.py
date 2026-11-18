@@ -227,7 +227,7 @@ def cognitive_commit_turn(
             indent=2,
         )
 
-    # Push SINKRON (patch v0.3.1 Aya): async_mode=True terpotong di one-shot MCP
+    # Push SINKRON (patch v0.3.1 agent): async_mode=True terpotong di one-shot MCP
     # call karena proses server keluar sebelum thread upload selesai. Dengan
     # _file_id_cache, upload sinkron tetap cepat dan dijamin selesai.
     synced = bridge.push_state(include_memory_db=True, async_mode=False)

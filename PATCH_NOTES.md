@@ -7,13 +7,13 @@
 > teknis/nama file, episode teknis dilewati sebagai sumber mimpi, kandidat
 > mimpi diperluas ke 20 episode teratas.
 > Rencana implementasi dari Sol (gpt-6.1-sol) — lihat file rencana v0.4.0 &
-> laporan ekspansi di workspace Aya. Semua parameter baru terpusat di
+> laporan ekspansi di workspace agent. Semua parameter baru terpusat di
 > `src/ai_cognitive_core/config.py` agar mudah di-tune selama tes.
 > Nilai energi & batas-batas di bawah adalah **nilai fase tes**, bukan final.
 
 ## Yang Baru di v0.4.0
 
-### 1. Curiosity — Aya menyimpan pertanyaan untuk Ryn
+### 1. Curiosity — agent menyimpan pertanyaan untuk Ryn
 - Tabel baru `curiosity_questions` (`question_id`, `text`, `topic`, `created_at`,
   `priority`, `status` pending/asked/dismissed, `last_offered_at`,
   `context_tags`, `expires_at`, `source`).
@@ -31,7 +31,7 @@
   `curiosity_asked_id`, atau dismissed lewat `dismiss_curiosity_id`.
 - `cognitive_get_status` menampilkan hitungan pending saja (tanpa isi).
 
-### 2. Niat mandiri — Aya membuat pengingatnya sendiri
+### 2. Niat mandiri — agent membuat pengingatnya sendiri
 - Tabel baru `reminder_intents` (`intent_id`, `text`, `created_at`,
   `due_at`/`trigger_condition`, `source`, `priority`, `status`
   pending/surfaced/completed/dismissed, `last_surfaced_at`, `repeat_policy`).
@@ -170,7 +170,7 @@
    - **Smart Pull Cooldown & File ID Cache:** Menghemat 85% waktu request Google Drive API saat sedang chat aktif di perangkat yang sama.
    - **Workspace `.md` Incremental Sync:** Menyinkronkan `IDENTITY.md`, `SOUL.md`, `USER.md`, `MEMORY.md`, `GOAL.md`, dan folder `memory/` hanya jika hash SHA-256 berubah saat `cognitive_sleep_cycle`.
 
-## Patch v0.3.1 (Aya, 15 Nov 2026 — di atas rilis maintainer v0.3.0)
+## Patch v0.3.1 (15 Nov 2026 — di atas rilis maintainer v0.3.0)
 
 1. **Whitelist backup `.md` (`drive_bridge.py` → `sync_workspace_markdown`):**
    - Mengganti `rglob("*.md")` (menyapu semua file `.md` sampai kedalaman 3, termasuk `docs/`, `memory/people/`, `memory/groups/`, `side-chats/`, `PATCH_NOTES.md`, `README.md`) dengan whitelist eksplisit: 7 file utama di root workspace (`IDENTITY.md`, `SOUL.md`, `USER.md`, `MEMORY.md`, `AGENTS.md`, `TOOLS.md`, `PROACTIVE_PREFERENCES.md`), catatan harian `memory/*.md`, bank memori `memory/bank/*.md`, dan file `.md` di tiap folder goal (`workspace/goals/*/`). Tes: 20 file ter-upload, run kedua 0 upload / 20 skip.

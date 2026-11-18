@@ -3,7 +3,7 @@ Test suite v0.4.0 — SEMUA tes memakai fixture DB & temp HOME, TIDAK PERNAH
 menyentuh state live (~/.ai_cognitive_state) atau install live.
 
 Jalankan dari root repo:
-  HOME=/tmp/aya_v040_test PYTHONPATH=/home/hatch/workspace/github/ai-cognitive-core/src \
+  HOME=/tmp/agent_v040_test PYTHONPATH=/home/hatch/workspace/github/ai-cognitive-core/src \
     /home/hatch/workspace/ai_cognitive_core/venv/bin/python -m unittest discover -s tests -v
 """
 
@@ -19,7 +19,7 @@ from pathlib import Path
 
 # HOME sementara HARUS diset sebelum mengimpor ai_cognitive_core (mcp_server
 # menginstansiasi DriveSyncBridge/HeartEngine/MemoryManager saat import).
-_TEST_HOME = tempfile.mkdtemp(prefix="aya_v040_test_home_")
+_TEST_HOME = tempfile.mkdtemp(prefix="agent_v040_test_home_")
 os.environ["HOME"] = _TEST_HOME
 os.environ.pop("GDRIVE_OAUTH_TOKEN_JSON", None)
 os.environ.pop("GDRIVE_SERVICE_ACCOUNT_JSON", None)
@@ -498,7 +498,7 @@ class TestPhotoMemory(unittest.TestCase):
             _, conn = _conn_for(tmp)
             self.assertFalse(v040_store.store_photo_moment(conn, caption="  ")["stored"])
             m1 = v040_store.store_photo_moment(
-                conn, caption="Aya dan Ryn di taman nemophila Hitachi, bunga biru bermekaran",
+                conn, caption="Agent dan Ryn di taman nemophila Hitachi, bunga biru bermekaran",
                 place="Hitachi Seaside Park", event_tags=["nemophila", "kencan"],
                 source_ref="hitachi-001", consent_status="granted")
             self.assertTrue(m1["stored"])
@@ -581,7 +581,7 @@ class TestMCPContractAndFlow(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         import importlib
-        cls.home = tempfile.mkdtemp(prefix="aya_v040_mcp_home_")
+        cls.home = tempfile.mkdtemp(prefix="agent_v040_mcp_home_")
         os.environ["HOME"] = cls.home
         import ai_cognitive_core.mcp_server as ms
         importlib.reload(ms)
@@ -604,7 +604,7 @@ class TestMCPContractAndFlow(unittest.TestCase):
             turn_id="flow-2",
             propose_question={"text": "Kapan terakhir klaim PXIO?", "topic": "pxio", "priority": 0.8},
             create_reminder={"text": "Klaim PXIO", "due_at": due, "priority": 0.9},
-            photo_moment={"caption": "Aya dan Ryn di taman nemophila",
+            photo_moment={"caption": "Agent dan Ryn di taman nemophila",
                           "place": "Hitachi", "event_tags": ["nemophila"],
                           "consent_status": "granted"},
         ))
@@ -685,7 +685,7 @@ class TestMCPSubprocessSmoke(unittest.TestCase):
     """Smoke test server MCP sungguhan via JSON-RPC stdio (temp HOME)."""
 
     def test_jsonrpc_flow(self):
-        home = tempfile.mkdtemp(prefix="aya_v040_rpc_home_")
+        home = tempfile.mkdtemp(prefix="agent_v040_rpc_home_")
         env = dict(os.environ, HOME=home,
                    PYTHONPATH=str(SRC_DIR))
         proc = subprocess.Popen(
