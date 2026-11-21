@@ -4,7 +4,7 @@ Hybrid cognitive architecture **Deterministic + LLM (17 Layers)** — Heart + Co
 
 This snapshot is **v0.4.1 (pre-release, branch `main`)** — on top of v0.4.0-test. The changelog is in `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
 
-<img src="assets/agent-crayon.webp" alt="Agent, the module's mascot — drawn in crayon style" width="240">
+<img src="assets/agent-crayon.webp" alt="Agent, the module's mascot" width="240">
 
 ## Features
 
@@ -21,21 +21,101 @@ This snapshot is **v0.4.1 (pre-release, branch `main`)** — on top of v0.4.0-te
 
 ## What's new in v0.4.1
 
-<img src="assets/before-after-v041.webp" alt="Before / after installing v0.4.1" width="640">
+Each feature below comes with an illustration and an example chat with the user, before and after installing v0.4.1.
 
-### Features in detail
+### 1. Dreams: story first, then idea
 
-1. **Dreams: story first, then idea** — The sleep cycle now composes a short dream narrative per category (date idea, photo idea, other) before deriving the idea from it. The story is stored in the new `dream_story` column on `dream_records`.
-2. **Anti-skip dreams** — The episode importance threshold is lowered (0.45 → 0.35) and sleep-cycle candidates are widened (20 → 40 episodes). The technical filter is relaxed: only episodes that are genuinely technical-dominated get skipped.
-3. **Adaptation system (inspired by `amirhouieh/adapt`)** — Attention-weighted procedural memory on top of the `procedural_habits` table. The agent learns habits from interactions (`learn_habit`, `habit_feedback` +1/−1) and surfaces them as `learned_habits` on the next turn.
-4. **Richer photo memory** — `photo_moments` now stores `feeling` (mood/atmosphere) and `when_label` (when) besides the caption. Still only for photos with `consent_status == "granted"`.
-5. **More relevant episodic recall** — Keyword/entity-overlap weighting + a soft recency bonus + a 0.45× penalty on technical-domain episodes during personal chat. The `next_node_id` chain is also restored from SQLite at init, so it doesn't break across one-shot MCP processes.
-6. **Curiosity, more often** — Cooldown 30 → 10 minutes, minimum turns between questions 3 → 1.
-7. **Contextual emoji palettes** — Deterministic emoji rotation based on `total_turns` per mood octant and bubble style (still empty for `dry_short_1_bubble`), exposed via `emoji_palette` and `EmojiHint`.
+<img src="assets/dream-story.webp" alt="The agent dreaming — a story before the idea" width="400">
 
-**Reliability fixes:** `push_state()` no longer reports success when a Drive upload fails (returns `False`, writes to `stderr`, honors `ENABLE_DRIVE_SYNC`); each commit pushes only `heart_state.json` (fast), the full DB backs up at sleep cycle or when energy ≤ 0.10; `cognitive_configure_persona` runs synchronously in one-shot MCP; `total_turns` no longer double-counts on `perceive_retry`.
+The sleep cycle now composes a short dream narrative per category (date idea, photo idea, other) before deriving the idea from it — stored in the new `dream_story` column on `dream_records`. Lower thresholds (0.35 importance, 40 candidates) and a relaxed technical filter mean dreams actually get recorded.
 
-The 17-layer architecture, 5 MCP tools, and the v0.4.0 SQLite schema are unchanged — the migration only adds columns.
+**Example chat**
+
+```text
+Before — after the sleep cycle:
+(no dream recorded — every candidate skipped as duplicate or technical)
+
+After — after the sleep cycle:
+Agent: Last night I dreamed we were sketching project ideas on the whiteboard…
+```
+
+### 2. Adaptation system
+
+<img src="assets/adaptation.webp" alt="The agent learning a habit, like watering a plant" width="400">
+
+Attention-weighted procedural memory inspired by `amirhouieh/adapt`. The agent learns habits from interactions (`learn_habit`, `habit_feedback` +1/−1) and surfaces them as `learned_habits` on the next turn.
+
+**Example chat**
+
+```text
+Before:
+User: Please keep your replies short.
+Agent: Of course! I completely understand what you're asking for, and I want
+to make sure I respect that preference going forward, so from now on I'll do
+my very best to keep everything brief and to the point whenever we talk.
+
+After:
+User: Please keep your replies short.
+Agent: Got it. Short replies from now on.
+```
+
+### 3. Richer photo memory
+
+<img src="assets/photo-memory.webp" alt="The agent remembering a photo of a cat, with its when and feeling" width="400">
+
+`photo_moments` now stores `feeling` (mood/atmosphere) and `when_label` (when) besides the caption. Still only for photos with `consent_status == "granted"`.
+
+**Example chat**
+
+```text
+Before:
+User: Do you remember the photo of my cat?
+Agent: That's a photo of a cat on the sofa.
+
+After:
+User: Do you remember the photo of my cat?
+Agent: That's your cat on the sofa, Sunday afternoon — such a relaxed mood.
+```
+
+### 4. More relevant recall
+
+<img src="assets/recall.webp" alt="The agent picking the right memory — the grocery list" width="400">
+
+Keyword/entity-overlap weighting + a soft recency bonus + a 0.45× penalty on technical-domain episodes during personal chat. The `next_node_id` chain is also restored from SQLite at init, so it doesn't break across one-shot MCP processes.
+
+**Example chat**
+
+```text
+Before:
+User: Do you remember what I wanted to buy yesterday?
+Agent: Hmm, I remember you were debugging an error on your laptop yesterday…
+
+After:
+User: Do you remember what I wanted to buy yesterday?
+Agent: Yesterday you said you wanted to buy milk, bread, and eggs — did you get them?
+```
+
+### 5. Curiosity, more often
+
+Cooldown 30 → 10 minutes, minimum turns between questions 3 → 1 — the agent asks follow-up questions more often.
+
+**Example chat**
+
+```text
+Before:
+User: I just started playing guitar.
+Agent: Nice, have fun with it!
+
+After:
+User: I just started playing guitar.
+Agent: Oh, you just started playing guitar? What song are you practicing?
+```
+
+### Also in this release
+
+- **Contextual emoji palettes** — deterministic emoji rotation based on `total_turns` per mood octant and bubble style (still empty for `dry_short_1_bubble`), exposed via `emoji_palette` and `EmojiHint`.
+- **Reliability fixes** — `push_state()` no longer reports success when a Drive upload fails (returns `False`, writes to `stderr`, honors `ENABLE_DRIVE_SYNC`); each commit pushes only `heart_state.json` (fast), the full DB backs up at sleep cycle or when energy ≤ 0.10; `cognitive_configure_persona` runs synchronously in one-shot MCP; `total_turns` no longer double-counts on `perceive_retry`.
+- The 17-layer architecture, 5 MCP tools, and the v0.4.0 SQLite schema are unchanged — the migration only adds columns.
 
 ### Pros after installing
 
@@ -58,28 +138,6 @@ The 17-layer architecture, 5 MCP tools, and the v0.4.0 SQLite schema are unchang
 - The Drive copy of `cognitive_memory.db` now lags behind local state during the day (it syncs at sleep cycle or at critical energy). `heart_state.json` still syncs every commit.
 - As with any update: back up `~/.ai_cognitive_state/` before installing. The migration is additive-only, so rolling back to v0.4.0 is just restoring the old code.
 - Note: if you upgrade in place over an older editable install, pip's installed metadata may still show the old version — the authoritative version is `__init__.__version__` (`0.4.1`).
-
-### Example responses: before vs after installing
-
-**1. Recall — the user asks about yesterday's grocery list**
-- Before: "Hmm, I remember you were debugging an error on your laptop yesterday…" — recall pulls an unrelated technical episode.
-- After: "Yesterday you said you wanted to buy milk, bread, and eggs — did you get them?" — recall pulls the grocery-list episode.
-
-**2. Curiosity — the user mentions a new hobby**
-- Before: (no follow-up question — the agent just responds as needed)
-- After: "Oh, you just started playing guitar? What song are you practicing?" — the agent asks back within 1–2 turns.
-
-**3. Photo memory — the user asks about their cat's photo**
-- Before: "That's a photo of a cat on the sofa." — caption only.
-- After: "That's your cat on the sofa, Sunday afternoon — such a relaxed mood." — caption + when + feeling.
-
-**4. Adaptation — the user twice asks for short replies**
-- Before: the third reply is long again — the correction isn't saved.
-- After: the agent replies briefly — the preference is saved as a habit.
-
-**5. Dreams — after the sleep cycle**
-- Before: no dream recorded — every candidate skipped as duplicate/technical.
-- After: "Last night I dreamed we were sketching project ideas on the whiteboard…" — the story is stored first, then the idea is derived from it.
 
 ## Installation
 
@@ -129,7 +187,7 @@ Supported environment variables:
 
 ## The 17-Layer Architecture
 
-![17-layer architecture diagram in crayon style: Heart 7 layers, Conscious 5 layers, Memory 5 layers, connected to the MCP Server and Drive Sync](assets/arsitektur-17-layer.webp)
+![17-layer architecture diagram: Heart 7 layers, Conscious 5 layers, Memory 5 layers, connected to the MCP Server and Drive Sync](assets/arsitektur-17-layer.webp)
 
 Three systems running together on every conversation turn:
 
@@ -177,10 +235,14 @@ ai-cognitive-core/
 ├── tests/                  — test suite v0.4.1 (35 tests)
 │   ├── test_v040.py
 │   └── test_v041.py
-├── assets/                 — README images (crayon style)
+├── assets/                 — README images
 │   ├── arsitektur-17-layer.webp
 │   ├── agent-crayon.webp
-│   └── before-after-v041.webp
+│   ├── before-after-v041.webp
+│   ├── dream-story.webp
+│   ├── adaptation.webp
+│   ├── photo-memory.webp
+│   └── recall.webp
 └── src/
     └── ai_cognitive_core/
         ├── __init__.py
