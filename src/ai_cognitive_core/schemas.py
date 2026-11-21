@@ -187,6 +187,7 @@ class EmotionalDirective(SerializableModel):
     max_words_per_bubble: int = 25
     conscience_override: Optional[str] = None
     tone_instruction: str = ""
+    emoji_palette: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -273,7 +274,7 @@ class ProceduralHabit(SerializableModel):
 
 @dataclass
 class CuriosityQuestion(SerializableModel):
-    """Pertanyaan yang disimpan agent untuk user, ditanyakan di momen yang pas."""
+    """Pertanyaan yang disimpan Aya untuk Ryn, ditanyakan di momen yang pas."""
     question_id: str
     text: str
     topic: str = ""
@@ -289,7 +290,7 @@ class CuriosityQuestion(SerializableModel):
 
 @dataclass
 class ReminderIntent(SerializableModel):
-    """Niat tindak lanjut / pengingat mandiri agent (berbasis jadwal/perkiraan)."""
+    """Niat tindak lanjut / pengingat mandiri Aya (berbasis jadwal/perkiraan)."""
     intent_id: str
     text: str
     created_at: str = field(default_factory=utc_now_iso)
@@ -311,6 +312,7 @@ class DreamRecord(SerializableModel):
     created_at: str = field(default_factory=utc_now_iso)
     source_episode_ids: List[str] = field(default_factory=list)
     theme: str = ""
+    dream_story: str = ""
     idea_text: str = ""
     category: str = "other"  # date_idea | photo_idea | other
     novelty_score: float = 0.5
@@ -329,4 +331,6 @@ class PhotoMoment(SerializableModel):
     event_tags: List[str] = field(default_factory=list)
     source_ref: str = ""  # referensi non-kredensial (misal nama file / id Drive)
     consent_status: str = "unknown"  # granted | revoked | unknown
+    feeling: str = ""
+    when_label: str = ""
     linked_episode_ids: List[str] = field(default_factory=list)

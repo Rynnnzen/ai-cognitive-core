@@ -42,7 +42,7 @@ except ImportError:
                             "result": {
                                 "protocolVersion": "2024-11-05",
                                 "capabilities": {"tools": {}},
-                                "serverInfo": {"name": self.name, "version": "0.4.0"},
+                                "serverInfo": {"name": self.name, "version": "0.4.1"},
                             },
                         }
                         sys.stdout.write(json.dumps(resp) + "\n")
@@ -150,6 +150,9 @@ def cognitive_commit_turn(
     photo_moment_id: str = "",
     photo_moment_action: str = "",
     photo_moment_correction: Optional[dict] = None,
+    # --- v0.4.1: sistem adaptasi (opsional, kompatibel ke belakang) ---
+    learn_habit: Optional[dict] = None,
+    habit_feedback: Optional[dict] = None,
 ) -> str:
     """
     Jalankan Fase 2 Siklus Kognitif Tertutup (Koreksi Appraisal SEC/OCC tanpa Double Energy Drain ->
@@ -227,10 +230,24 @@ def cognitive_commit_turn(
             indent=2,
         )
 
-    # Push SINKRON (patch v0.3.1 agent): async_mode=True terpotong di one-shot MCP
-    # call karena proses server keluar sebelum thread upload selesai. Dengan
-    # _file_id_cache, upload sinkron tetap cepat dan dijamin selesai.
-    synced = bridge.push_state(include_memory_db=True, async_mode=False)
+    # v0.4.1: sistem adaptasi L5 (learn_habit & habit_feedback)
+    habit_outcomes = {}
+    if isinstance(learn_habit, dict) and learn_habit.get("trigger_pattern") and learn_habit.get("action_template"):
+        habit_outcomes["learned"] = memory.learn_procedural_habit(
+            learn_habit.get("trigger_pattern", ""),
+            learn_habit.get("action_template", ""),
+        )
+    if isinstance(habit_feedback, dict) and habit_feedback.get("habit_id"):
+        habit_outcomes["reinforced"] = memory.reinforce_procedural_habit(
+            habit_feedback["habit_id"],
+            delta=int(habit_feedback.get("delta", 1)),
+        )
+
+    # Push SINKRON (v0.4.1): DB penuh di-upload saat sleep_cycle, saat energi
+    # kritis (<= DRIVE_CRITICAL_ENERGY_THRESHOLD), atau jika DRIVE_PUSH_DB_ON_COMMIT=True.
+    critical_energy = heart.state.neuro.energy <= getattr(config, "DRIVE_CRITICAL_ENERGY_THRESHOLD", 0.10)
+    push_db = getattr(config, "DRIVE_PUSH_DB_ON_COMMIT", False) or critical_energy
+    synced = bridge.push_state(include_memory_db=push_db, async_mode=False)
 
     return json.dumps(
         {
@@ -241,7 +258,9 @@ def cognitive_commit_turn(
             "mood_octant": directive.mood_octant,
             "bubble_style": directive.bubble_style,
             "gdrive_synced": synced,
+            "gdrive_db_included": push_db,
             "v040_outcomes": bundle.get("outcomes", {}),
+            "habit_outcomes": habit_outcomes,
         },
         ensure_ascii=False,
         indent=2,
@@ -318,7 +337,7 @@ def cognitive_configure_persona(
     heart.state.pad_baseline = PADVector(P=baseline_p, A=baseline_a, D=baseline_d).clamp()
     heart.state.emotional_inertia_pi1 = max(0.05, min(0.90, float(inertia_pi1)))
     heart.save()
-    synced = bridge.push_state(include_memory_db=False, async_mode=True)
+    synced = bridge.push_state(include_memory_db=False, async_mode=False)
     return json.dumps(
         {
             "status": "persona_updated",

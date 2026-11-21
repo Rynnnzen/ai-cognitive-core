@@ -63,9 +63,9 @@ def run_sleep_consolidation(db_path: str) -> dict:
         FROM episodic_nodes
         WHERE importance_score >= ?
         ORDER BY importance_score DESC
-        LIMIT 20
+        LIMIT ?
         """,
-        (config.DREAM_MIN_EPISODE_IMPORTANCE,),
+        (config.DREAM_MIN_EPISODE_IMPORTANCE, getattr(config, "DREAM_CANDIDATE_LIMIT", 40)),
     )
     dream_rows = cur.fetchall()
     dream_episodes = [

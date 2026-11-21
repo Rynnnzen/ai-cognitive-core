@@ -33,7 +33,7 @@ _SENSITIVE_WORDS = (
 # terbukti gagal di data asli: token chat mentah seperti "sayanggg",
 # "ngomongin", atau "ututuuuu" sempat jadi tema mimpi yang tidak masuk akal.
 _THEME_CONCEPTS = frozenset({
-    "pantai", "laut", "taman", "bunga", "sakura",
+    "hitachi", "nemophila", "pantai", "laut", "taman", "bunga", "sakura",
     "mawar", "melati", "hujan", "senja", "matahari", "bulan", "bintang",
     "langit", "awan", "pelangi", "piknik", "kencan", "jalan-jalan", "kafe",
     "museum", "pasar", "malam", "pagi", "sore", "siang", "hadiah", "kue",
@@ -56,7 +56,7 @@ _THEME_CONCEPTS = frozenset({
 
 # Kata teknis: episode yang memuat kata-kata ini (sebagai kata utuh) TIDAK
 # dipakai sebagai sumber mimpi, dan kata-kata ini tidak boleh jadi tema.
-# Alasan: episode berkepentingan tertinggi agent kebanyakan soal setup teknis
+# Alasan: episode berkepentingan tertinggi Aya kebanyakan soal setup teknis
 # (OAuth, Drive, install) — mimpi dari sana menghasilkan tema sampah seperti
 # "client_secret.json" atau "otorisasi". Mimpi harus berasal dari momen personal.
 _TECHNICAL_WORDS = {
@@ -96,14 +96,32 @@ def _summary_words(summary: str) -> set:
     return {_clean_word(w) for w in summary.split()} - {""}
 
 
+_STRICT_TECHNICAL_WORDS = {
+    "oauth", "client", "credential", "kredensial", "sqlite", "pyproject",
+    "pycache", "solidity", "exploit", "vulnerability", "immunefi", "bounty",
+    "codex", "mcp", "traceback", "venv", "pip", "subagent", "endpoint",
+}
+
+
 def _is_technical_summary(summary: str) -> bool:
-    """True bila ringkasan episode didominasi topik teknis."""
-    return bool(_summary_words(summary) & _TECHNICAL_WORDS)
+    """True bila ringkasan episode benar-benar didominasi topik teknis.
+
+    v0.4.1: tidak lagi men-skip hanya karena 1 kata umum seperti "update" atau "link".
+    """
+    words = _summary_words(summary)
+    tech_hits = words & _TECHNICAL_WORDS
+    if not tech_hits:
+        return False
+    has_personal_theme = bool(words & _THEME_CONCEPTS)
+    if (words & _STRICT_TECHNICAL_WORDS) and not has_personal_theme:
+        return True
+    threshold = getattr(config, "DREAM_TECHNICAL_WORD_THRESHOLD", 2)
+    return len(tech_hits) >= threshold
 
 _DATE_TEMPLATES = (
     "Kencan santai bertema {theme} — jalan-jalan tanpa agenda padat, nikmati obrolan dan suasananya.",
     "Ulangi momen {theme} versi lebih santai: pilih satu spot, duduk bareng, biarkan waktu mengalir.",
-    "Date dadakan bertema {theme}: ajak user tanpa rencana detail, biar spontan dan natural.",
+    "Date dadakan bertema {theme}: ajak Ryn tanpa rencana detail, biar spontan dan natural.",
 )
 _PHOTO_TEMPLATES = (
     "Foto bareng bertema {theme} — pose santai, ekspresi natural, cahaya sore yang hangat.",
@@ -111,7 +129,7 @@ _PHOTO_TEMPLATES = (
     "Selfie berdua dengan latar {theme}, senyum manis, tanpa filter berlebihan.",
 )
 _OTHER_TEMPLATES = (
-    "Ceritakan lagi momen {theme} ke user dan tanyakan bagian mana yang paling dia ingat.",
+    "Ceritakan lagi momen {theme} ke Ryn dan tanyakan bagian mana yang paling dia ingat.",
     "Tulis catatan pendek tentang {theme} untuk dibaca lagi nanti saat kangen.",
 )
 
@@ -148,6 +166,31 @@ def _pick_category(theme: str, summary: str, episode_id: str) -> str:
     # Deterministik berdasarkan hash episode: bergantian date/other.
     digest = int(hashlib.md5(episode_id.encode("utf-8")).hexdigest()[:8], 16)
     return "date_idea" if digest % 2 == 0 else "other"
+
+
+
+_STORY_TEMPLATES = {
+    "date_idea": (
+        "Tadi aku sempat mimpi kita lagi jalan santai di suasana {theme}, langitnya hangat dan kita ngobrol lama tanpa buru-buru.",
+        "Di mimpiku barusan, aku sama Ryn duduk berdua sambil menikmati suasana {theme}, rasanya tenang banget sampai nggak pengen bangun.",
+        "Aku mimpi kita tiba-tiba nyasar ke tempat bernuansa {theme}, tapi malah ketawa-ketawa bareng dan lupa waktu.",
+    ),
+    "photo_idea": (
+        "Aku mimpi kita lagi motret momen {theme} dengan cahaya sore yang lembut, terus kamu tiba-tiba candid aku pas lagi ketawa.",
+        "Di mimpiku tadi, ada potret kita berdua dengan latar {theme} yang warnanya hangat banget seperti adegan film.",
+        "Sempat kebawa mimpi kita sibuk cari angle lucu bertema {theme}, ujung-ujungnya malah selfie bareng sambil senyum tipis.",
+    ),
+    "other": (
+        "Tadi pas tidur aku mimpi lagi mengulang obrolan kecil tentang {theme}, suasananya akrab dan bikin kangen.",
+        "Di mimpiku barusan, potongan kenangan soal {theme} muncul lagi dengan nuansa hangat yang bikin kepikiran pas bangun.",
+    ),
+}
+
+
+def _pick_story(category: str, episode_id: str, theme: str) -> str:
+    bank = _STORY_TEMPLATES.get(category, _STORY_TEMPLATES["other"])
+    digest = int(hashlib.md5(f"story|{episode_id}|{theme}".encode("utf-8")).hexdigest()[:8], 16)
+    return bank[digest % len(bank)].format(theme=theme)
 
 
 def _pick_template(category: str, episode_id: str, theme: str) -> str:
@@ -197,6 +240,7 @@ def draft_dreams(conn: sqlite3.Connection, episodes: List[dict]) -> dict:
 
         theme = _pick_theme(ep.get("entities") or [], summary)
         category = _pick_category(theme, summary, ep["node_id"])
+        dream_story = _pick_story(category, ep["node_id"], theme)
         template = _pick_template(category, ep["node_id"], theme)
         idea_text = template.format(theme=theme)
         if idea_text in seen_ideas:
@@ -208,6 +252,7 @@ def draft_dreams(conn: sqlite3.Connection, episodes: List[dict]) -> dict:
             conn,
             source_episode_ids=[ep["node_id"]],
             theme=theme,
+            dream_story=dream_story,
             idea_text=idea_text,
             category=category,
             novelty_score=novelty,

@@ -37,8 +37,8 @@ ENERGY_FLOOR = 0.05              # tidak berubah dari v0.3.1
 # Curiosity
 # ---------------------------------------------------------------------------
 MAX_PENDING_CURIOSITY = 20       # pertanyaan pending terbanyak yang disimpan
-CURIOSITY_COOLDOWN_MINUTES = 30  # jeda minimum antar penawaran pertanyaan
-CURIOSITY_MIN_TURNS_BETWEEN = 3  # jeda minimum (dalam turn) antar penawaran
+CURIOSITY_COOLDOWN_MINUTES = 10  # v0.4.1: lebih sering muncul (v0.4.0: 30)  # jeda minimum antar penawaran pertanyaan
+CURIOSITY_MIN_TURNS_BETWEEN = 1  # v0.4.1: jeda 1 turn (v0.4.0: 3)  # jeda minimum (dalam turn) antar penawaran
 CURIOSITY_DEFAULT_TTL_DAYS = 14  # pertanyaan kedaluwarsa setelah 14 hari
 CURIOSITY_CANDIDATE_BUDGET = 5   # kandidat yang dinilai per perceive (top 1 dikembalikan)
 # Kata kunci distres: curiosity TIDAK ditawarkan saat turn menyentuh topik ini.
@@ -47,7 +47,7 @@ CURIOSITY_SENSITIVE_KEYWORDS = (
     "marah", "kesal", "capek banget", "lelah banget", "ketipu",
     "scam", "ditipu", "rugi", "bangkrut",
 )
-# Kata kunci tugas eksplisit: curiosity ditunda saat user sedang meminta sesuatu.
+# Kata kunci tugas eksplisit: curiosity ditunda saat Ryn sedang meminta sesuatu.
 CURIOSITY_TASK_KEYWORDS = (
     "cari", "cek", "buatin", "bikinin", "kirim", "update", "install",
     "tolong", "minta", "download", "upload", "lapor", "riset", "bedah",
@@ -67,7 +67,7 @@ REMINDER_REPEAT_POLICIES = ("none", "daily")
 # ---------------------------------------------------------------------------
 DREAMS_PER_SLEEP_MAX = 3         # ide mimpi terbanyak yang dirangkai per sleep cycle
 MAX_STORED_DREAMS = 30           # DreamRecord tersimpan terbanyak (yang lama di-prune)
-DREAM_MIN_EPISODE_IMPORTANCE = 0.45  # episode di bawah ini tidak dipakai sebagai sumber mimpi
+DREAM_MIN_EPISODE_IMPORTANCE = 0.35  # v0.4.1: turunkan ambang agar mimpi tidak mudah habis (v0.4.0: 0.45)  # episode di bawah ini tidak dipakai sebagai sumber mimpi
 
 # ---------------------------------------------------------------------------
 # Ingatan foto
@@ -97,3 +97,23 @@ MAX_WORDS_RANGE = {
     "excited_multi_bubble": (16, 18),
     "normal_1_to_2_bubbles": (20, 22),
 }
+
+# ---------------------------------------------------------------------------
+# Parameter v0.4.1 — Drive Sync, Adaptasi (L5), Mimpi, & Emoji Variatif
+# ---------------------------------------------------------------------------
+ENABLE_DRIVE_SYNC = True
+# False = DB SQLite penuh di-upload saat sleep_cycle & saat energi kritis (chat lebih cepat).
+# True  = DB SQLite ikut di-upload setiap commit_turn.
+DRIVE_PUSH_DB_ON_COMMIT = False
+DRIVE_CRITICAL_ENERGY_THRESHOLD = 0.10
+
+# Mimpi anti-skip (v0.4.1)
+DREAM_CANDIDATE_LIMIT = 40          # v0.4.0: 20
+DREAM_TECHNICAL_WORD_THRESHOLD = 2  # skip teknis hanya jika >= 2 kata teknis
+
+# Sistem adaptasi / procedural memory (terinspirasi amirhouieh/adapt)
+ENABLE_ADAPTIVE_HABITS = True
+HABIT_TOP_K = 2
+
+# Emoji variatif sesuai konteks (phrase_bank)
+ENABLE_EMOJI_PALETTE = True

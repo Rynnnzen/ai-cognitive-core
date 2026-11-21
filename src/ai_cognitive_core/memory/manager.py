@@ -18,6 +18,11 @@ from ai_cognitive_core.memory.layers.l3_episodic_graph import (
     run_bounded_ppr,
 )
 from ai_cognitive_core.memory.layers.l4_semantic_schema import retrieve_semantic_facts
+from ai_cognitive_core.memory.layers.l5_procedural_habits import (
+    learn_habit,
+    match_habits,
+    reinforce_habit,
+)
 from ai_cognitive_core.memory import migration, v040_store
 
 
@@ -78,6 +83,15 @@ class MemoryManager:
         # v0.4.0: migrasi idempotent (tabel baru + kolom provenans + backup
         # <db>.bak-v0.3.1 bila belum ada). Aman dijalankan berulang.
         migration.migrate_db(self.db_path)
+        conn2 = sqlite3.connect(str(self.db_path))
+        try:
+            row = conn2.execute(
+                "SELECT node_id FROM episodic_nodes ORDER BY timestamp_utc DESC LIMIT 1"
+            ).fetchone()
+            if row:
+                self._last_node_id = row[0]
+        finally:
+            conn2.close()
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(str(self.db_path))
@@ -94,19 +108,21 @@ class MemoryManager:
 
     def retrieve_context(self, query_text: str, pad_now: PADVector) -> Tuple[List[EpisodicNode], List[SemanticFact], float]:
         conn = sqlite3.connect(str(self.db_path))
-        episodes, ca1_mismatch = run_bounded_ppr(
-            conn, query_text, pad_now, top_k=config.RETRIEVAL_TOP_K_EPISODES
-        )
-
-        for ep in episodes:
-            conn.execute(
-                "UPDATE episodic_nodes SET stability_status = 'LABILE', access_count = access_count + 1 WHERE node_id = ?",
-                (ep.node_id,),
+        try:
+            episodes, ca1_mismatch = run_bounded_ppr(
+                conn, query_text, pad_now, top_k=config.RETRIEVAL_TOP_K_EPISODES
             )
-        conn.commit()
-        facts = retrieve_semantic_facts(conn, limit=config.RETRIEVAL_TOP_K_FACTS)
-        conn.close()
-        return episodes, facts, ca1_mismatch
+
+            for ep in episodes:
+                conn.execute(
+                    "UPDATE episodic_nodes SET stability_status = 'LABILE', access_count = access_count + 1 WHERE node_id = ?",
+                    (ep.node_id,),
+                )
+            conn.commit()
+            facts = retrieve_semantic_facts(conn, limit=config.RETRIEVAL_TOP_K_FACTS)
+            return episodes, facts, ca1_mismatch
+        finally:
+            conn.close()
 
     def _insert_episode(
         self,
@@ -253,6 +269,8 @@ class MemoryManager:
                     source_ref=pm.get("source_ref", ""),
                     consent_status=pm.get("consent_status", "unknown"),
                     timestamp=pm.get("timestamp"),
+                    feeling=pm.get("feeling", ""),
+                    when_label=pm.get("when_label", ""),
                     linked_episode_ids=linked,
                     commit=False,
                 )
@@ -362,5 +380,33 @@ class MemoryManager:
         conn = self._connect()
         try:
             return v040_store.v040_counts(conn)
+        finally:
+            conn.close()
+
+    # ------------------------------------------------------------------
+    # v0.4.1 — L5 Procedural Habits (Sistem Adaptasi)
+    # ------------------------------------------------------------------
+
+    def match_procedural_habits(self, user_input: str, top_k: int = 2) -> list:
+        if not getattr(config, "ENABLE_ADAPTIVE_HABITS", True):
+            return []
+        conn = self._connect()
+        try:
+            habits = match_habits(conn, user_input, top_k=top_k)
+            return [h.model_dump() for h in habits]
+        finally:
+            conn.close()
+
+    def learn_procedural_habit(self, trigger_pattern: str, action_template: str) -> dict:
+        conn = self._connect()
+        try:
+            return learn_habit(conn, trigger_pattern, action_template, commit=True)
+        finally:
+            conn.close()
+
+    def reinforce_procedural_habit(self, habit_id: str, delta: int = 1) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            return reinforce_habit(conn, habit_id, delta=delta, commit=True)
         finally:
             conn.close()

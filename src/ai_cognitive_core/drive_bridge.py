@@ -286,6 +286,8 @@ class DriveSyncBridge:
         return False, local_delta
 
     def push_state(self, include_memory_db: bool = True, async_mode: bool = False) -> bool:
+        from ai_cognitive_core import config
+
         if include_memory_db and self.db_path.exists():
             self._checkpoint_sqlite()
 
@@ -302,32 +304,30 @@ class DriveSyncBridge:
         self.meta_path.write_text(json.dumps(meta_payload, indent=2), encoding="utf-8")
         self._last_pull_check_mono = time.monotonic()
 
-        if not self.service:
+        if not getattr(config, "ENABLE_DRIVE_SYNC", True) or not self.service:
             return False
 
-        def _do_upload():
+        def _do_upload() -> bool:
             try:
                 with self._lock:
                     folder_id = self._ensure_remote_state_folder()
                     if not folder_id:
-                        return
+                        return False
                     self._upload_file(self.heart_path, folder_id, mime_type="application/json")
                     if include_memory_db and self.db_path.exists():
                         self._upload_file(self.db_path, folder_id, mime_type="application/x-sqlite3")
                     self._upload_file(self.meta_path, folder_id, mime_type="application/json")
-            except Exception:
-                pass
+                return True
+            except Exception as exc:
+                sys.stderr.write(f"[DriveSyncBridge] Push gagal: {exc}\n")
+                return False
 
         if async_mode:
             t = threading.Thread(target=_do_upload, daemon=True)
             t.start()
             return True
 
-        try:
-            _do_upload()
-            return True
-        except Exception:
-            return False
+        return _do_upload()
 
     def sync_workspace_markdown(
         self,
@@ -378,8 +378,8 @@ class DriveSyncBridge:
                 if not ws_folder_id:
                     return {"uploaded_md_count": 0, "skipped_unchanged_count": 0}
 
-                # Whitelist (patch v0.3.1 agent): hanya file .md yang memang bagian
-                # dari setup/memori agent. Jangan rglob semua *.md — itu ikut menyapu
+                # Whitelist (patch v0.3.1 Aya): hanya file .md yang memang bagian
+                # dari setup/memori Aya. Jangan rglob semua *.md — itu ikut menyapu
                 # docs/, memory/people/, memory/groups/, side-chats/, PATCH_NOTES.md,
                 # README.md, dan folder paket kode.
                 md_files: List[Path] = []

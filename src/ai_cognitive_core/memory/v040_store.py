@@ -494,6 +494,7 @@ def store_dream(
     source_episode_ids: List[str],
     theme: str,
     idea_text: str,
+    dream_story: str = "",
     category: str = "other",
     novelty_score: float = 0.5,
     sensitivity_tags: Optional[List[str]] = None,
@@ -527,12 +528,12 @@ def store_dream(
     conn.execute(
         """
         INSERT INTO dream_records
-        (dream_id, created_at, source_episode_ids_json, theme, idea_text,
+        (dream_id, created_at, source_episode_ids_json, theme, dream_story, idea_text,
          category, novelty_score, status, sensitivity_tags_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'stored', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'stored', ?)
         """,
         (
-            did, utc_now_iso(), source_key, theme, idea_text, category,
+            did, utc_now_iso(), source_key, theme, (dream_story or "").strip(), idea_text, category,
             max(0.0, min(1.0, float(novelty_score))), _json_list(sensitivity_tags),
         ),
     )
@@ -546,7 +547,7 @@ def select_dream_to_surface(conn: sqlite3.Connection, commit: bool = True) -> Op
         return None
     row = conn.execute(
         """
-        SELECT dream_id, theme, idea_text, category, novelty_score,
+        SELECT dream_id, theme, COALESCE(dream_story, ''), idea_text, category, novelty_score,
                source_episode_ids_json, created_at
         FROM dream_records WHERE status = 'stored'
         ORDER BY created_at ASC LIMIT 1
@@ -554,7 +555,7 @@ def select_dream_to_surface(conn: sqlite3.Connection, commit: bool = True) -> Op
     ).fetchone()
     if not row:
         return None
-    did, theme, idea_text, category, novelty, sources_json, created_at = row
+    did, theme, dream_story, idea_text, category, novelty, sources_json, created_at = row
     conn.execute(
         "UPDATE dream_records SET status = 'surfaced' WHERE dream_id = ?", (did,)
     )
@@ -562,6 +563,7 @@ def select_dream_to_surface(conn: sqlite3.Connection, commit: bool = True) -> Op
     return {
         "dream_id": did,
         "theme": theme,
+        "dream_story": dream_story,
         "idea_text": idea_text,
         "category": category,
         "novelty_score": float(novelty),
@@ -602,6 +604,8 @@ def store_photo_moment(
     source_ref: str = "",
     consent_status: str = "unknown",
     timestamp: Optional[str] = None,
+    feeling: str = "",
+    when_label: str = "",
     linked_episode_ids: Optional[List[str]] = None,
     commit: bool = True,
 ) -> dict:
@@ -619,13 +623,14 @@ def store_photo_moment(
         """
         INSERT INTO photo_moments
         (moment_id, timestamp, caption, people_json, place, event_tags_json,
-         source_ref, consent_status, linked_episode_ids_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         source_ref, consent_status, feeling, when_label, linked_episode_ids_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             mid, timestamp or utc_now_iso(), caption, _json_list(people),
             place or "", _json_list(event_tags), source_ref or "",
-            consent_status, _json_list(linked_episode_ids),
+            consent_status, (feeling or "").strip(), (when_label or "").strip(),
+            _json_list(linked_episode_ids),
         ),
     )
     _maybe_commit(conn, commit)
@@ -639,7 +644,7 @@ def select_photo_reference(conn: sqlite3.Connection, *, user_text: str) -> Optio
     rows = conn.execute(
         """
         SELECT moment_id, timestamp, caption, people_json, place,
-               event_tags_json, source_ref
+               event_tags_json, source_ref, COALESCE(feeling, ''), COALESCE(when_label, '')
         FROM photo_moments WHERE consent_status IN ({})
         ORDER BY timestamp DESC LIMIT ?
         """.format(",".join("?" * len(config.PHOTO_SURFACEABLE_CONSENT))),
@@ -651,21 +656,27 @@ def select_photo_reference(conn: sqlite3.Connection, *, user_text: str) -> Optio
     query_tokens = _tokens(user_text)
     best = None
     best_overlap = 0
-    for mid, ts, caption, people_json, place, tags_json, source_ref in rows:
-        haystack = f"{caption} {place} {' '.join(_from_json_list(tags_json))} {' '.join(_from_json_list(people_json))}"
+    for mid, ts, caption, people_json, place, tags_json, source_ref, feeling, when_label in rows:
+        people_list = _from_json_list(people_json)
+        tags_list = _from_json_list(tags_json)
+        haystack = f"{caption} {place} {feeling} {when_label} {' '.join(tags_list)} {' '.join(people_list)}"
         overlap = len(query_tokens & _tokens(haystack))
         if overlap >= config.PHOTO_MIN_KEYWORD_OVERLAP and overlap > best_overlap:
             best_overlap = overlap
             best = {
                 "moment_id": mid,
                 "timestamp": ts,
+                "when_label": when_label,
                 "caption": caption,
+                "people": people_list,
                 "place": place,
+                "feeling": feeling,
+                "event_tags": tags_list,
                 "source_ref": source_ref,
                 "keyword_overlap": overlap,
-                # Penanda jujur: rujukan ini dari caption yang disimpan,
+                # Penanda jujur: rujukan ini dari caption & metadata momen yang disimpan,
                 # modul tidak pernah melihat isi gambarnya.
-                "uncertainty_note": "Berdasarkan caption/deskripsi yang disimpan — modul tidak melihat isi foto.",
+                "uncertainty_note": "Berdasarkan caption & catatan momen yang disimpan — modul tidak melihat isi foto.",
             }
     return best
 
@@ -677,7 +688,7 @@ def correct_photo_moment(
     **fields,
 ) -> bool:
     """Koreksi metadata momen foto (caption, place, people, event_tags, consent)."""
-    allowed = {"caption", "place", "consent_status"}
+    allowed = {"caption", "place", "consent_status", "feeling", "when_label"}
     updates = {}
     for key, value in fields.items():
         if key in allowed and isinstance(value, str):

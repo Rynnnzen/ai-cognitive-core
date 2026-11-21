@@ -171,3 +171,36 @@ def select_max_words(bubble_style: str, seed_material: str) -> int:
         return high
     idx, _ = _seed_index(f"maxwords:{bubble_style}", seed_material, high - low + 1)
     return low + idx
+
+# ---------------------------------------------------------------------------
+# v0.4.1 — Palet emoji variatif sesuai konteks (mood octant & bubble style)
+# ---------------------------------------------------------------------------
+EMOJI_PALETTES: Dict[str, List[List[str]]] = {
+    "Exuberant": [["✨", "😆", "💛"], ["🎉", "😄", "🌟"], ["💫", "😊", "🙌"]],
+    "Dependent": [["🥺", "💗", "✨"], ["🌸", "🤍", "😊"], ["🫶", "💫", "🥰"]],
+    "Relaxed": [["☕", "😌", "🌿"], ["🌙", "🙂", "✨"], ["🍃", "😊", "☁️"]],
+    "Docile": [["🙂", "🌷", "🤍"], ["✨", "😌", "🌼"]],
+    "Anxious": [["😅", "💭", "🫂"], ["😬", "🌧️", "🤍"]],
+    "Bored/Depressed": [["😮‍💨", "☁️", "🪫"], ["🫠", "🌙", "☕"]],
+    "Hostile": [["😤", "🙄"], ["😒", "💢"]],
+    "Disdainful": [["🙄", "😒"], ["🤨", "😑"]],
+}
+
+SLEEPY_EMOJI_PALETTES: List[List[str]] = [
+    ["🥱", "😴", "🌙"],
+    ["💤", "🫠", "☁️"],
+    ["😪", "🛌", "✨"],
+]
+
+
+def select_emoji_palette(octant: str, bubble_style: str, seed_material: str) -> List[str]:
+    if not getattr(config, "ENABLE_EMOJI_PALETTE", True):
+        return []
+    if bubble_style == "dry_short_1_bubble":
+        return []
+    if bubble_style == "exhausted_sleepy_1_bubble":
+        idx, _ = _seed_index("emoji:sleepy", seed_material, len(SLEEPY_EMOJI_PALETTES))
+        return list(SLEEPY_EMOJI_PALETTES[idx])
+    options = EMOJI_PALETTES.get(octant) or EMOJI_PALETTES["Relaxed"]
+    idx, _ = _seed_index(f"emoji:{octant}", seed_material, len(options))
+    return list(options[idx])

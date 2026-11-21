@@ -192,6 +192,7 @@ class HeartEngine:
         seed_material = f"{self.state.total_turns}|{octant}|{bubble_style}"
         bubble_desc, phrase_seed = phrase_bank.get_bubble_rule(bubble_style, seed_material)
         max_words = phrase_bank.select_max_words(bubble_style, seed_material)
+        emoji_palette = phrase_bank.select_emoji_palette(octant, bubble_style, seed_material)
         self.last_phrase_seed = phrase_seed
 
         tone_parts = [
@@ -209,6 +210,8 @@ class HeartEngine:
         if self.state.conscience.guilt > 0.3:
             guilt_fragment, _ = phrase_bank.get_guilt_fragment(seed_material)
             tone_parts.append(guilt_fragment)
+        if emoji_palette:
+            tone_parts.append(f"EmojiHint={' '.join(emoji_palette)} (pakai seperlunya, jangan berlebihan)")
 
         return EmotionalDirective(
             mood_octant=octant,
@@ -222,4 +225,5 @@ class HeartEngine:
             max_words_per_bubble=max_words,
             conscience_override=self.state.conscience.lubb_reason,
             tone_instruction="; ".join(tone_parts),
+            emoji_palette=emoji_palette,
         )

@@ -110,6 +110,9 @@ _NEW_TABLES: Dict[str, str] = {
 _ADDITIVE_COLUMNS: List[tuple] = [
     ("semantic_facts", "source", "TEXT DEFAULT ''"),
     ("semantic_facts", "inference_status", "TEXT DEFAULT 'inferred'"),
+    ("dream_records", "dream_story", "TEXT DEFAULT ''"),
+    ("photo_moments", "feeling", "TEXT DEFAULT ''"),
+    ("photo_moments", "when_label", "TEXT DEFAULT ''"),
 ]
 
 

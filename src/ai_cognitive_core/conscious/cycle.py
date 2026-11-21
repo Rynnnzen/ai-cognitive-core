@@ -43,7 +43,8 @@ class CognitiveCycleRunner:
 
         # v0.4.0: hitung giliran (dipakai seed phrase bank & telemetri).
         # Dinaikkan SEBELUM step agar build_directive memakai nomor turn ini.
-        self.heart.state.total_turns += 1
+        if not perceive_retry:
+            self.heart.state.total_turns += 1
         energy_before = self.heart.state.neuro.energy
 
         # 2. Heart 7-Layer Fast Step (dengan deteksi micro-cues & jeda waktu balas)
@@ -98,6 +99,13 @@ class CognitiveCycleRunner:
             "recalled_episodes": [ep.model_dump() for ep in episodes],
             "semantic_facts": [f.model_dump() for f in facts],
         }
+
+        # 5b. v0.4.1 — L5 Procedural Habits (sistem adaptasi)
+        habits = self.memory.match_procedural_habits(
+            user_input, top_k=getattr(config, "HABIT_TOP_K", 2)
+        )
+        if habits:
+            result["learned_habits"] = habits
 
         # 6. v0.4.0 — konten proaktif (masing-masing MAKSIMAL 1 per perceive).
         texting_style = fast_heuristic_appraisal(user_input).texting_style_detected
