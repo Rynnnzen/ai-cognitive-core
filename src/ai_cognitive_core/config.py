@@ -47,7 +47,7 @@ CURIOSITY_SENSITIVE_KEYWORDS = (
     "marah", "kesal", "capek banget", "lelah banget", "ketipu",
     "scam", "ditipu", "rugi", "bangkrut",
 )
-# Kata kunci tugas eksplisit: curiosity ditunda saat Ryn sedang meminta sesuatu.
+# Kata kunci tugas eksplisit: curiosity ditunda saat user sedang meminta sesuatu.
 CURIOSITY_TASK_KEYWORDS = (
     "cari", "cek", "buatin", "bikinin", "kirim", "update", "install",
     "tolong", "minta", "download", "upload", "lapor", "riset", "bedah",

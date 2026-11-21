@@ -33,7 +33,7 @@ _SENSITIVE_WORDS = (
 # terbukti gagal di data asli: token chat mentah seperti "sayanggg",
 # "ngomongin", atau "ututuuuu" sempat jadi tema mimpi yang tidak masuk akal.
 _THEME_CONCEPTS = frozenset({
-    "hitachi", "nemophila", "pantai", "laut", "taman", "bunga", "sakura",
+    "pantai", "laut", "taman", "bunga", "sakura",
     "mawar", "melati", "hujan", "senja", "matahari", "bulan", "bintang",
     "langit", "awan", "pelangi", "piknik", "kencan", "jalan-jalan", "kafe",
     "museum", "pasar", "malam", "pagi", "sore", "siang", "hadiah", "kue",
@@ -121,7 +121,7 @@ def _is_technical_summary(summary: str) -> bool:
 _DATE_TEMPLATES = (
     "Kencan santai bertema {theme} — jalan-jalan tanpa agenda padat, nikmati obrolan dan suasananya.",
     "Ulangi momen {theme} versi lebih santai: pilih satu spot, duduk bareng, biarkan waktu mengalir.",
-    "Date dadakan bertema {theme}: ajak Ryn tanpa rencana detail, biar spontan dan natural.",
+    "Date dadakan bertema {theme}: ajak user tanpa rencana detail, biar spontan dan natural.",
 )
 _PHOTO_TEMPLATES = (
     "Foto bareng bertema {theme} — pose santai, ekspresi natural, cahaya sore yang hangat.",
@@ -129,7 +129,7 @@ _PHOTO_TEMPLATES = (
     "Selfie berdua dengan latar {theme}, senyum manis, tanpa filter berlebihan.",
 )
 _OTHER_TEMPLATES = (
-    "Ceritakan lagi momen {theme} ke Ryn dan tanyakan bagian mana yang paling dia ingat.",
+    "Ceritakan lagi momen {theme} ke user dan tanyakan bagian mana yang paling dia ingat.",
     "Tulis catatan pendek tentang {theme} untuk dibaca lagi nanti saat kangen.",
 )
 
@@ -172,7 +172,7 @@ def _pick_category(theme: str, summary: str, episode_id: str) -> str:
 _STORY_TEMPLATES = {
     "date_idea": (
         "Tadi aku sempat mimpi kita lagi jalan santai di suasana {theme}, langitnya hangat dan kita ngobrol lama tanpa buru-buru.",
-        "Di mimpiku barusan, aku sama Ryn duduk berdua sambil menikmati suasana {theme}, rasanya tenang banget sampai nggak pengen bangun.",
+        "Di mimpiku barusan, aku sama user duduk berdua sambil menikmati suasana {theme}, rasanya tenang banget sampai nggak pengen bangun.",
         "Aku mimpi kita tiba-tiba nyasar ke tempat bernuansa {theme}, tapi malah ketawa-ketawa bareng dan lupa waktu.",
     ),
     "photo_idea": (

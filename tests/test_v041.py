@@ -73,7 +73,7 @@ class TestV041Features(unittest.TestCase):
             actions={
                 "photo_moment": {
                     "caption": "Selfie sore di pantai",
-                    "people": ["Ryn", "agent"],
+                    "people": ["user", "agent"],
                     "place": "Pantai Pangandaran",
                     "feeling": "hangat dan bahagia",
                     "when_label": "sore minggu lalu",
@@ -86,7 +86,7 @@ class TestV041Features(unittest.TestCase):
         self.assertIsNotNone(ref)
         self.assertEqual(ref["feeling"], "hangat dan bahagia")
         self.assertEqual(ref["when_label"], "sore minggu lalu")
-        self.assertEqual(ref["people"], ["Ryn", "agent"])
+        self.assertEqual(ref["people"], ["user", "agent"])
 
     def test_recall_domain_alignment_and_chain_persistence(self):
         ep1 = self.memory.encode_episode(
