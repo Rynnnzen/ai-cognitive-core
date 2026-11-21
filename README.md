@@ -121,6 +121,7 @@ Energy refills automatically during rest (toward 0.92 while resting) and drains 
 ```text
 ai-cognitive-core/
 ├── README.md               — this document
+├── LICENSE                 — MIT License
 ├── PATCH_NOTES.md          — patch history (incl. v0.4.0, in Indonesian)
 ├── CHANGELOG.md            — changelog (v0.4.1)
 ├── pyproject.toml          — package metadata + dependencies
@@ -197,3 +198,7 @@ This repo contains code only. The following files are set up per device and neve
 
 - `token.json`, `client_secret.json` (Drive OAuth credentials)
 - `heart_state.json`, `cognitive_memory.db` (personal state + memory)
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
