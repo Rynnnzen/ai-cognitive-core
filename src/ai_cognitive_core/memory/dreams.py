@@ -56,7 +56,7 @@ _THEME_CONCEPTS = frozenset({
 
 # Kata teknis: episode yang memuat kata-kata ini (sebagai kata utuh) TIDAK
 # dipakai sebagai sumber mimpi, dan kata-kata ini tidak boleh jadi tema.
-# Alasan: episode berkepentingan tertinggi Aya kebanyakan soal setup teknis
+# Alasan: episode berkepentingan tertinggi agent kebanyakan soal setup teknis
 # (OAuth, Drive, install) — mimpi dari sana menghasilkan tema sampah seperti
 # "client_secret.json" atau "otorisasi". Mimpi harus berasal dari momen personal.
 _TECHNICAL_WORDS = {

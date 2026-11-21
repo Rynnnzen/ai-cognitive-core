@@ -274,7 +274,7 @@ class ProceduralHabit(SerializableModel):
 
 @dataclass
 class CuriosityQuestion(SerializableModel):
-    """Pertanyaan yang disimpan Aya untuk Ryn, ditanyakan di momen yang pas."""
+    """Pertanyaan yang disimpan agent untuk Ryn, ditanyakan di momen yang pas."""
     question_id: str
     text: str
     topic: str = ""
@@ -290,7 +290,7 @@ class CuriosityQuestion(SerializableModel):
 
 @dataclass
 class ReminderIntent(SerializableModel):
-    """Niat tindak lanjut / pengingat mandiri Aya (berbasis jadwal/perkiraan)."""
+    """Niat tindak lanjut / pengingat mandiri agent (berbasis jadwal/perkiraan)."""
     intent_id: str
     text: str
     created_at: str = field(default_factory=utc_now_iso)

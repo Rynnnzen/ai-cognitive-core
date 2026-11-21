@@ -16,7 +16,7 @@ from ai_cognitive_core.schemas import PADVector
 
 class TestV041Features(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="aya_v041_test_"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="agent_v041_test_"))
         self.db_path = self.tmp / "mem.db"
         self.heart_path = self.tmp / "heart.json"
         self.memory = MemoryManager(self.db_path)
@@ -73,7 +73,7 @@ class TestV041Features(unittest.TestCase):
             actions={
                 "photo_moment": {
                     "caption": "Selfie sore di pantai",
-                    "people": ["Ryn", "Aya"],
+                    "people": ["Ryn", "agent"],
                     "place": "Pantai Pangandaran",
                     "feeling": "hangat dan bahagia",
                     "when_label": "sore minggu lalu",
@@ -86,7 +86,7 @@ class TestV041Features(unittest.TestCase):
         self.assertIsNotNone(ref)
         self.assertEqual(ref["feeling"], "hangat dan bahagia")
         self.assertEqual(ref["when_label"], "sore minggu lalu")
-        self.assertEqual(ref["people"], ["Ryn", "Aya"])
+        self.assertEqual(ref["people"], ["Ryn", "agent"])
 
     def test_recall_domain_alignment_and_chain_persistence(self):
         ep1 = self.memory.encode_episode(

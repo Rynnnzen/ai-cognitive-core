@@ -378,8 +378,8 @@ class DriveSyncBridge:
                 if not ws_folder_id:
                     return {"uploaded_md_count": 0, "skipped_unchanged_count": 0}
 
-                # Whitelist (patch v0.3.1 Aya): hanya file .md yang memang bagian
-                # dari setup/memori Aya. Jangan rglob semua *.md — itu ikut menyapu
+                # Whitelist (patch v0.3.1 agent): hanya file .md yang memang bagian
+                # dari setup/memori agent. Jangan rglob semua *.md — itu ikut menyapu
                 # docs/, memory/people/, memory/groups/, side-chats/, PATCH_NOTES.md,
                 # README.md, dan folder paket kode.
                 md_files: List[Path] = []
