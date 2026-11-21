@@ -4,8 +4,12 @@ client_secret.json
 service_account.json
 heart_state.json
 cognitive_memory.db
+sync_meta.json
+md_backup_hashes.json
 *.db
 *.sqlite3
+*.db-wal
+*.db-shm
 .ai_cognitive_state/
 credentials*.json
 .env
@@ -14,9 +18,11 @@ credentials*.json
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
 build/
 dist/
 *.egg
+*.bak*
 .venv/
 venv/
 

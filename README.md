@@ -2,9 +2,9 @@
 
 Arsitektur kognitif hibrida **Deterministik + LLM (17 Layer)** — Heart + Conscious + Memory — sebagai MCP server, dengan sinkronisasi state lintas perangkat lewat Google Drive API v3.
 
-Snapshot ini adalah **v0.4.0 (fase tes, branch `v0.4.0-test`)** — di atas v0.3.1 patched. Daftar patch ada di `PATCH_NOTES.md`.
+Snapshot ini adalah **v0.4.1 (pre-release, branch `v0.4.1`)** — di atas v0.4.0-test. Daftar perubahan ada di `CHANGELOG.md` (bahasa Inggris); riwayat patch lama ada di `PATCH_NOTES.md`.
 
-**Baru di v0.4.0:** Curiosity (agent menyimpan pertanyaan untuk momen yang pas), Niat mandiri (pengingat berbasis jadwal), Mimpi pas tidur (ide kencan/foto generatif dari sleep cycle), Ingatan foto (momen dari caption eksplisit), energi lebih hemat (drain dasar 0.012 → 0.010), bahasa lebih variatif (phrase bank deterministik), plus fondasi: identitas giliran, commit transaksional, dan provenans minimum. Struktur 17 layer, 5 tool MCP, dan 4 nilai `bubble_style` tidak berubah. Detail lengkap di `PATCH_NOTES.md` bagian v0.4.0.
+**Baru di v0.4.1:** Mimpi kini menyimpan cerita dulu baru ide (kolom `dream_story`), mimpi anti-skip (ambang 0.35, 40 kandidat), sistem adaptasi terinspirasi `amirhouieh/adapt` (memori prosedural berbobot atensi), ingatan foto lebih hidup (`feeling` + `when_label`), recall lebih nyambung (bobot keyword, bonus recency, penalti domain teknis), rasa penasaran lebih sering (cooldown 10 menit), palet emoji kontekstual, plus perbaikan reliabilitas: backup Drive tanpa false-positive dan backup DB efisien (commit hanya mendorong `heart_state.json`). Arsitektur 17 layer, 5 tool MCP, dan skema SQLite v0.4.0 tidak berubah — migrasi hanya menambah kolom. Detail lengkap di `CHANGELOG.md`.
 
 ![Agent, maskot modul ini — digambar gaya crayon](assets/agent-crayon.webp)
 
@@ -62,9 +62,11 @@ Energi terisi otomatis selama istirahat (menuju 0,92 saat resting) dan terkuras 
 ai-cognitive-core/
 ├── README.md               — dokumen ini
 ├── PATCH_NOTES.md          — riwayat patch (termasuk v0.4.0)
+├── CHANGELOG.md            — changelog (v0.4.1, bahasa Inggris)
 ├── pyproject.toml          — metadata paket + dependensi
-├── tests/                  — test suite v0.4.0 (fixture DB + temp HOME)
-│   └── test_v040.py
+├── tests/                  — test suite v0.4.1 (35 tes, fixture DB + temp HOME)
+│   ├── test_v040.py
+│   └── test_v041.py
 ├── assets/                 — gambar README (gaya crayon)
 │   ├── arsitektur-17-layer.webp
 │   └── agent-crayon.webp
@@ -74,14 +76,14 @@ ai-cognitive-core/
         ├── mcp_server.py       — server FastMCP + 5 tools
         ├── drive_bridge.py     — sinkronisasi Google Drive (OAuth)
         ├── schemas.py          — skema data bersama
-        ├── config.py           — parameter v0.4.0 dalam satu tempat
+        ├── config.py           — parameter v0.4.1 dalam satu tempat
         ├── conscious/
         │   ├── cycle.py        — orkestrator siklus kognitif
         │   ├── schemas.py
         │   └── layers/         — l1_preconscious s.d. l5_metacognition
         ├── heart/
         │   ├── engine.py       — mesin emosi
-        │   ├── phrase_bank.py  — bank frasa v0.4.0 (variasi deterministik)
+        │   ├── phrase_bank.py  — bank frasa v0.4.1 (variasi deterministik + palet emoji kontekstual)
         │   ├── schemas.py
         │   └── layers/         — l1_neurochemical s.d. l7_conscience
         └── memory/
