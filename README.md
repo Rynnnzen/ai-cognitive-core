@@ -4,15 +4,26 @@ Hybrid cognitive architecture **Deterministic + LLM (17 Layers)** — Heart + Co
 
 This snapshot is **v0.4.1 (pre-release, branch `main`)** — on top of v0.4.0-test. The changelog is in `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
 
-**New in v0.4.1:** Dreams now store the story before the idea (`dream_story` column), anti-skip dreams (0.35 threshold, 40 candidates), an adaptation system inspired by `amirhouieh/adapt` (attention-weighted procedural memory), richer photo memory (`feeling` + `when_label`), more relevant recall (keyword weighting, recency bonus, technical-domain penalty), curiosity more often (10-minute cooldown), contextual emoji palettes, plus reliability fixes: Drive backup without false positives and efficient DB backup (each commit pushes only `heart_state.json`). The 17-layer architecture, 5 MCP tools, and the v0.4.0 SQLite schema are unchanged — the migration only adds columns. Full details in `CHANGELOG.md`.
+<img src="assets/agent-crayon.webp" alt="Agent, the module's mascot — drawn in crayon style" width="240">
 
-![Before / after installing v0.4.1](assets/before-after-v041.webp)
+## Features
 
-![Agent, the module's mascot — drawn in crayon style](assets/agent-crayon.webp)
+- **17-layer cognitive architecture** — Heart (7 emotion layers), Conscious (5 awareness layers), and Memory (5 memory layers) running as one closed loop per turn.
+- **Dreams with stories** — the sleep cycle composes a short dream narrative before deriving the idea from it (`dream_story`).
+- **Anti-skip dreams** — lower thresholds (0.35 importance, 40 candidates) so dreams actually get recorded.
+- **Adaptation system** — attention-weighted procedural memory inspired by `amirhouieh/adapt`; the agent learns habits from interactions.
+- **Richer photo memory** — moments carry `feeling` and `when_label`, not just a caption.
+- **Relevant recall** — keyword/entity-overlap weighting, a recency bonus, and a technical-domain penalty in personal chat.
+- **Curiosity** — the agent asks follow-up questions more often (10-minute cooldown, 1 turn apart).
+- **Contextual emoji palettes** — emoji variety that follows the mood and bubble style.
+- **Google Drive sync** — state (`heart_state.json`, `cognitive_memory.db`) syncs across devices via Drive API v3.
+- **5 MCP tools** — perceive, commit, sleep cycle, status, and persona configuration.
 
-## v0.4.1 in detail — features, pros, cons
+## What's new in v0.4.1
 
-### Features
+<img src="assets/before-after-v041.webp" alt="Before / after installing v0.4.1" width="640">
+
+### Features in detail
 
 1. **Dreams: story first, then idea** — The sleep cycle now composes a short dream narrative per category (date idea, photo idea, other) before deriving the idea from it. The story is stored in the new `dream_story` column on `dream_records`.
 2. **Anti-skip dreams** — The episode importance threshold is lowered (0.45 → 0.35) and sleep-cycle candidates are widened (20 → 40 episodes). The technical filter is relaxed: only episodes that are genuinely technical-dominated get skipped.
@@ -23,6 +34,8 @@ This snapshot is **v0.4.1 (pre-release, branch `main`)** — on top of v0.4.0-te
 7. **Contextual emoji palettes** — Deterministic emoji rotation based on `total_turns` per mood octant and bubble style (still empty for `dry_short_1_bubble`), exposed via `emoji_palette` and `EmojiHint`.
 
 **Reliability fixes:** `push_state()` no longer reports success when a Drive upload fails (returns `False`, writes to `stderr`, honors `ENABLE_DRIVE_SYNC`); each commit pushes only `heart_state.json` (fast), the full DB backs up at sleep cycle or when energy ≤ 0.10; `cognitive_configure_persona` runs synchronously in one-shot MCP; `total_turns` no longer double-counts on `perceive_retry`.
+
+The 17-layer architecture, 5 MCP tools, and the v0.4.0 SQLite schema are unchanged — the migration only adds columns.
 
 ### Pros after installing
 
@@ -68,6 +81,52 @@ This snapshot is **v0.4.1 (pre-release, branch `main`)** — on top of v0.4.0-te
 - Before: no dream recorded — every candidate skipped as duplicate/technical.
 - After: "Last night I dreamed we were sketching project ideas on the whiteboard…" — the story is stored first, then the idea is derived from it.
 
+## Installation
+
+```bash
+git clone https://github.com/Rynnnzen/ai-cognitive-core.git
+cd ai-cognitive-core
+pip install -e .
+```
+
+Or directly from GitHub:
+
+```bash
+pip install git+https://github.com/Rynnnzen/ai-cognitive-core.git
+```
+
+Requires Python >= 3.10. Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`.
+
+Run the server with `ai-cognitive-mcp` (stdio).
+
+## Usage
+
+### The per-turn cycle
+
+1. `cognitive_perceive_and_think` — Heart, Conscious, and Memory run together: reading the message, recalling relevant episodes, then producing the mood, dominant emotion, and bubble style.
+2. `cognitive_commit_turn` — the turn is saved to episodic memory with its inner monologue and appraisal values, then pushed to Drive immediately.
+3. `cognitive_sleep_cycle` — at rest: replaying important episodes (Sharp-Wave Ripples), abstracting into semantic schemas, pruning trivial memories (Ebbinghaus), and refilling energy.
+4. `cognitive_get_status` — check energy, mood, and memory status anytime.
+5. `cognitive_configure_persona` — configure the persona (careful: default values overwrite existing attachment).
+
+Energy refills automatically during rest (toward 0.92 while resting) and drains while working. Below ~0.32, the reply style automatically becomes a single short sleepy bubble.
+
+### Google Drive sync
+
+Authentication uses OAuth (not a service account). Prepare `client_secret.json` from the Google Cloud Console (Desktop app, Drive scope), then:
+
+```bash
+ai-cognitive-auth /path/to/client_secret.json
+```
+
+The token is stored at `~/.ai_cognitive_state/token.json`. Local state (`heart_state.json`, `cognitive_memory.db`) also syncs to the `ai_cognitive_system/live_state` folder on Drive.
+
+Supported environment variables:
+
+- `GDRIVE_TOKEN_PATH` — `token.json` path (default `~/.ai_cognitive_state/token.json`)
+- `GDRIVE_CLIENT_SECRET_PATH` — `client_secret.json` path
+- `COGNITIVE_DEVICE_ID` — device name, e.g. `hermes_pc` or `muse_cloud`
+
 ## The 17-Layer Architecture
 
 ![17-layer architecture diagram in crayon style: Heart 7 layers, Conscious 5 layers, Memory 5 layers, connected to the MCP Server and Drive Sync](assets/arsitektur-17-layer.webp)
@@ -106,26 +165,16 @@ Layered memory on SQLite, from fleeting impressions to settled knowledge.
 - L4 Semantic Schema — semantic facts: lessons abstracted from episodes during sleep.
 - L5 Procedural Habits — procedural habits formed from repeated patterns.
 
-## The per-turn cycle
-
-1. `cognitive_perceive_and_think` — Heart, Conscious, and Memory run together: reading the message, recalling relevant episodes, then producing the mood, dominant emotion, and bubble style.
-2. `cognitive_commit_turn` — the turn is saved to episodic memory with its inner monologue and appraisal values, then pushed to Drive immediately.
-3. `cognitive_sleep_cycle` — at rest: replaying important episodes (Sharp-Wave Ripples), abstracting into semantic schemas, pruning trivial memories (Ebbinghaus), and refilling energy.
-4. `cognitive_get_status` — check energy, mood, and memory status anytime.
-5. `cognitive_configure_persona` — configure the persona (careful: default values overwrite existing attachment).
-
-Energy refills automatically during rest (toward 0.92 while resting) and drains while working. Below ~0.32, the reply style automatically becomes a single short sleepy bubble.
-
 ## Project structure
 
 ```text
 ai-cognitive-core/
 ├── README.md               — this document
 ├── LICENSE                 — MIT License
-├── PATCH_NOTES.md          — patch history (incl. v0.4.0, in Indonesian)
+├── PATCH_NOTES.md          — patch history (v0.4.0, Indonesian)
 ├── CHANGELOG.md            — changelog (v0.4.1)
 ├── pyproject.toml          — package metadata + dependencies
-├── tests/                  — test suite v0.4.1 (35 tests, fixture DB + temp HOME)
+├── tests/                  — test suite v0.4.1 (35 tests)
 │   ├── test_v040.py
 │   └── test_v041.py
 ├── assets/                 — README images (crayon style)
@@ -145,52 +194,18 @@ ai-cognitive-core/
         │   └── layers/         — l1_preconscious to l5_metacognition
         ├── heart/
         │   ├── engine.py       — emotion engine
-        │   ├── phrase_bank.py  — v0.4.1 phrase bank (deterministic variation + contextual emoji palettes)
+        │   ├── phrase_bank.py  — v0.4.1 phrase bank + emoji palettes
         │   ├── schemas.py
         │   └── layers/         — l1_neurochemical to l7_conscience
         └── memory/
             ├── manager.py      — SQLite memory manager
-            ├── consolidation.py — sleep consolidation (SWR + pruning + dreams)
+            ├── consolidation.py — sleep consolidation (SWR + pruning)
             ├── migration.py    — v0.4.0 schema migration (idempotent)
             ├── v040_store.py   — v0.4.0 feature storage
             ├── dreams.py       — dream composer
             ├── schemas.py
             └── layers/         — l1_sensory_buffer to l5_procedural_habits
 ```
-
-## Installation
-
-```bash
-git clone https://github.com/Rynnnzen/ai-cognitive-core.git
-cd ai-cognitive-core
-pip install -e .
-```
-
-Or directly from GitHub:
-
-```bash
-pip install git+https://github.com/Rynnnzen/ai-cognitive-core.git
-```
-
-Requires Python >= 3.10. Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`.
-
-Run the server with `ai-cognitive-mcp` (stdio).
-
-## Google Drive sync
-
-Authentication uses OAuth (not a service account). Prepare `client_secret.json` from the Google Cloud Console (Desktop app, Drive scope), then:
-
-```bash
-ai-cognitive-auth /path/to/client_secret.json
-```
-
-The token is stored at `~/.ai_cognitive_state/token.json`. Local state (`heart_state.json`, `cognitive_memory.db`) also syncs to the `ai_cognitive_system/live_state` folder on Drive.
-
-Supported environment variables:
-
-- `GDRIVE_TOKEN_PATH` — `token.json` path (default `~/.ai_cognitive_state/token.json`)
-- `GDRIVE_CLIENT_SECRET_PATH` — `client_secret.json` path
-- `COGNITIVE_DEVICE_ID` — device name, e.g. `hermes_pc` or `muse_cloud`
 
 ## Personal files are NOT in this repo
 
