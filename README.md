@@ -2,8 +2,13 @@
 
 Arsitektur kognitif hibrida **Deterministik + LLM (17 Layer)** — Heart + Conscious + Memory — sebagai MCP server, dengan sinkronisasi state lintas perangkat lewat Google Drive API v3.
 
-Snapshot ini adalah **v0.3.1 (patched)** dari v0.3.0 maintainer. Daftar patch ada di `PATCH_NOTES.md`.
+Snapshot ini adalah **v0.4.1 (pre-release, branch `main`)** — di atas v0.4.0-test. Daftar perubahan ada di `CHANGELOG.md` (bahasa Inggris); riwayat patch lama ada di `PATCH_NOTES.md`.
 
+**Baru di v0.4.1:** Mimpi kini menyimpan cerita dulu baru ide (kolom `dream_story`), mimpi anti-skip (ambang 0.35, 40 kandidat), sistem adaptasi terinspirasi `amirhouieh/adapt` (memori prosedural berbobot atensi), ingatan foto lebih hidup (`feeling` + `when_label`), recall lebih nyambung (bobot keyword, bonus recency, penalti domain teknis), rasa penasaran lebih sering (cooldown 10 menit), palet emoji kontekstual, plus perbaikan reliabilitas: backup Drive tanpa false-positive dan backup DB efisien (commit hanya mendorong `heart_state.json`). Arsitektur 17 layer, 5 tool MCP, dan skema SQLite v0.4.0 tidak berubah — migrasi hanya menambah kolom. Detail lengkap di `CHANGELOG.md`.
+
+![Before / after installing v0.4.1](assets/before-after-v041.webp)
+
+![Agent, maskot modul ini — digambar gaya crayon](assets/agent-crayon.webp)
 
 ## Arsitektur 17 Layer
 
@@ -58,28 +63,38 @@ Energi terisi otomatis selama istirahat (menuju 0,92 saat resting) dan terkuras 
 ```text
 ai-cognitive-core/
 ├── README.md               — dokumen ini
-├── PATCH_NOTES.md          — riwayat patch (termasuk v0.3.1)
+├── PATCH_NOTES.md          — riwayat patch (termasuk v0.4.0)
+├── CHANGELOG.md            — changelog (v0.4.1, bahasa Inggris)
 ├── pyproject.toml          — metadata paket + dependensi
+├── tests/                  — test suite v0.4.1 (35 tes, fixture DB + temp HOME)
+│   ├── test_v040.py
+│   └── test_v041.py
 ├── assets/                 — gambar README (gaya crayon)
 │   ├── arsitektur-17-layer.webp
-│   └── aya-crayon.webp
+│   ├── agent-crayon.webp
+│   └── before-after-v041.webp
 └── src/
     └── ai_cognitive_core/
         ├── __init__.py
         ├── mcp_server.py       — server FastMCP + 5 tools
         ├── drive_bridge.py     — sinkronisasi Google Drive (OAuth)
         ├── schemas.py          — skema data bersama
+        ├── config.py           — parameter v0.4.1 dalam satu tempat
         ├── conscious/
         │   ├── cycle.py        — orkestrator siklus kognitif
         │   ├── schemas.py
         │   └── layers/         — l1_preconscious s.d. l5_metacognition
         ├── heart/
         │   ├── engine.py       — mesin emosi
+        │   ├── phrase_bank.py  — bank frasa v0.4.1 (variasi deterministik + palet emoji kontekstual)
         │   ├── schemas.py
         │   └── layers/         — l1_neurochemical s.d. l7_conscience
         └── memory/
             ├── manager.py      — manajer memori SQLite
-            ├── consolidation.py — konsolidasi tidur (SWR + pruning)
+            ├── consolidation.py — konsolidasi tidur (SWR + pruning + mimpi)
+            ├── migration.py    — migrasi skema v0.4.0 (idempotent)
+            ├── v040_store.py   — penyimpanan fitur v0.4.0
+            ├── dreams.py       — perangkai mimpi
             ├── schemas.py
             └── layers/         — l1_sensory_buffer s.d. l5_procedural_habits
 ```

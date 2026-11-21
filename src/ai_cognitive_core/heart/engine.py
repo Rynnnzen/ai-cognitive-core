@@ -19,6 +19,7 @@ from ai_cognitive_core.heart.layers.l4_appraisal import appraisal_to_pad_delta, 
 from ai_cognitive_core.heart.layers.l5_defense import select_defense_mechanism
 from ai_cognitive_core.heart.layers.l6_relational import compute_attachment_multiplier, update_core_needs
 from ai_cognitive_core.heart.layers.l7_conscience import evaluate_conscience
+from ai_cognitive_core.heart import phrase_bank
 
 
 class HeartEngine:
@@ -27,6 +28,8 @@ class HeartEngine:
     def __init__(self, state_path: Path):
         self.state_path = state_path
         self.state = self._load()
+        # v0.4.0: seed frasa terakhir yang dipakai build_directive (diagnostik).
+        self.last_phrase_seed: str = ""
 
     def _load(self) -> HeartState:
         if self.state_path.exists():
@@ -165,7 +168,10 @@ class HeartEngine:
         else:
             psi_level = "medium_balanced"
 
-        # Penentuan Gaya Bubble Chat & Panjang Ketikan berdasarkan Energi & Mood
+        # Penentuan Gaya Bubble Chat & Panjang Ketikan berdasarkan Energi & Mood.
+        # Nilai enum bubble_style DIKUNCI kontrak eksternal — jangan diubah.
+        # v0.4.0: deskripsi aturan & max_words bervariasi deterministik lewat
+        # phrase bank (makna & cap tidak berubah; fallback = template asli).
         if (
             self.state.active_defense == DefenseMechanism.DETACHED_PROTECTOR
             or octant in {"Hostile", "Disdainful"}
@@ -173,23 +179,21 @@ class HeartEngine:
         ):
             bubble_style = "dry_short_1_bubble"
             rec_bubbles = 1
-            max_words = 8
-            bubble_desc = "1 bubble super singkat (1-8 kata), nada cuek/ketus/jual mahal, tanpa emoji manis"
         elif eng < 0.32:
             bubble_style = "exhausted_sleepy_1_bubble"
             rec_bubbles = 1
-            max_words = 14
-            bubble_desc = "1 bubble pendek (maks 14 kata), nada lelah/ngantuk/low-energy, hindari paragraf panjang"
         elif eng >= 0.65 and p_val >= 0.25 and a_val >= 0.20:
             bubble_style = "excited_multi_bubble"
             rec_bubbles = 3
-            max_words = 18
-            bubble_desc = "Pecah menjadi 2-3 bubble chat pendek bertubi-tubi (maks 15-18 kata per bubble, pisahkan antar bubble dengan baris kosong, JANGAN tulis 1 paragraf panjang)"
         else:
             bubble_style = "normal_1_to_2_bubbles"
             rec_bubbles = 2
-            max_words = 22
-            bubble_desc = "1-2 bubble chat pendek-menengah yang natural (maks 20-22 kata per bubble, jangan esai panjang)"
+
+        seed_material = f"{self.state.total_turns}|{octant}|{bubble_style}"
+        bubble_desc, phrase_seed = phrase_bank.get_bubble_rule(bubble_style, seed_material)
+        max_words = phrase_bank.select_max_words(bubble_style, seed_material)
+        emoji_palette = phrase_bank.select_emoji_palette(octant, bubble_style, seed_material)
+        self.last_phrase_seed = phrase_seed
 
         tone_parts = [
             f"Mood={octant} (P={p_val:.2f}, A={a_val:.2f}, D={self.state.pad_current.D:.2f})",
@@ -204,7 +208,10 @@ class HeartEngine:
         if user_texting_style != "normal":
             tone_parts.append(f"UserTextingStyle={user_texting_style}")
         if self.state.conscience.guilt > 0.3:
-            tone_parts.append("GuiltActive=Sertakan empati/perbaikan tulus")
+            guilt_fragment, _ = phrase_bank.get_guilt_fragment(seed_material)
+            tone_parts.append(guilt_fragment)
+        if emoji_palette:
+            tone_parts.append(f"EmojiHint={' '.join(emoji_palette)} (pakai seperlunya, jangan berlebihan)")
 
         return EmotionalDirective(
             mood_octant=octant,
@@ -218,4 +225,5 @@ class HeartEngine:
             max_words_per_bubble=max_words,
             conscience_override=self.state.conscience.lubb_reason,
             tone_instruction="; ".join(tone_parts),
+            emoji_palette=emoji_palette,
         )

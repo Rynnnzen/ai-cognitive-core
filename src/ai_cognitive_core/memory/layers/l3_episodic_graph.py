@@ -8,6 +8,30 @@ from ai_cognitive_core.schemas import EpisodicNode, PADVector, SomaticTag
 
 EMBED_DIM = 128
 
+_RECALL_STOPWORDS = {
+    "yang", "dan", "di", "ke", "dari", "aku", "kamu", "saya", "ini", "itu",
+    "ada", "sudah", "lagi", "banget", "sih", "dong", "ya", "nggak", "tidak",
+    "apa", "gimana", "kenapa", "kapan", "dimana", "dengan", "untuk", "atau",
+    "juga", "saja", "aja", "kok", "kan", "tuh", "nih", "deh", "loh", "lah",
+    "user", "monologue",
+}
+
+_TECH_DOMAIN_WORDS = {
+    "codex", "oauth", "sqlite", "pytest", "unittest", "pyproject", "github",
+    "python", "venv", "pip", "json", "mcp", "server", "token", "secret",
+    "config", "migration", "schema", "branch", "commit", "repo", "bug",
+    "error", "debug", "traceback", "script", "install", "backup", "restore",
+}
+
+
+def _content_tokens(text: str) -> set:
+    out = set()
+    for raw in text.lower().replace("|", " ").replace(",", " ").replace(".", " ").replace("!", " ").replace("?", " ").split():
+        w = raw.strip("'\"()[]{}:;")
+        if len(w) >= 3 and w not in _RECALL_STOPWORDS:
+            out.add(w)
+    return out
+
 
 def deterministic_embed(text: str) -> np.ndarray:
     vec = np.zeros(EMBED_DIM, dtype=np.float32)
@@ -66,9 +90,14 @@ def run_bounded_ppr(
         return [], 1.0
 
     q_vec = deterministic_embed(query_text)
+    q_tokens = _content_tokens(query_text)
+    query_is_tech = bool(q_tokens & _TECH_DOMAIN_WORDS)
+
     nodes: List[EpisodicNode] = []
     vecs: List[np.ndarray] = []
     sims = np.zeros(len(rows), dtype=np.float32)
+    overlaps = np.zeros(len(rows), dtype=np.float32)
+    domain_mult = np.ones(len(rows), dtype=np.float32)
 
     id_to_idx = {}
     for i, r in enumerate(rows):
@@ -90,6 +119,13 @@ def run_bounded_ppr(
         vecs.append(v)
         sims[i] = max(0.0, cosine_sim(q_vec, v))
 
+        ep_tokens = _content_tokens(node.summary) | {e.lower() for e in node.entities}
+        if q_tokens and ep_tokens:
+            overlaps[i] = len(q_tokens & ep_tokens) / max(1, min(len(q_tokens), len(ep_tokens)))
+        ep_tech_hits = len(ep_tokens & _TECH_DOMAIN_WORDS)
+        if not query_is_tech and ep_tech_hits >= 2 and overlaps[i] < 0.25:
+            domain_mult[i] = 0.45
+
     n = len(nodes)
     adj = np.zeros((n, n), dtype=np.float32)
     for i, nd in enumerate(nodes):
@@ -107,7 +143,7 @@ def run_bounded_ppr(
     row_sums = adj.sum(axis=1, keepdims=True)
     trans = np.divide(adj, row_sums, out=np.zeros_like(adj), where=row_sums > 1e-8)
 
-    p0 = sims.copy()
+    p0 = (0.65 * sims + 0.35 * overlaps) * domain_mult
     if p0.sum() > 1e-8:
         p0 /= p0.sum()
     else:
@@ -120,7 +156,9 @@ def run_bounded_ppr(
     final_scores = []
     for i, nd in enumerate(nodes):
         bias = pad_congruence_bias(pad_now, nd.somatic_tag.pad_at_encoding)
-        score = bias * (0.45 * float(ppr[i]) + 0.55 * float(sims[i]))
+        recency = 1.0 + 0.08 * math.exp(-i / 25.0)
+        base_rel = 0.35 * float(ppr[i]) + 0.40 * float(sims[i]) + 0.25 * float(overlaps[i])
+        score = bias * recency * float(domain_mult[i]) * base_rel
         final_scores.append((score, nd))
 
     final_scores.sort(key=lambda x: x[0], reverse=True)

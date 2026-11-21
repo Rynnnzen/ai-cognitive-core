@@ -128,6 +128,9 @@ class HeartState(SerializableModel):
     last_updated_utc: str = field(default_factory=utc_now_iso)
     is_resting: bool = False
     rest_started_utc: Optional[str] = None
+    # v0.4.0: jumlah perceive yang pernah dijalankan (1 per giliran chat).
+    # Dipakai sebagai komponen seed deterministik phrase bank & telemetri.
+    total_turns: int = 0
     neuro: NeuroState = field(default_factory=NeuroState)
     primary_affects: PrimaryAffectState = field(default_factory=PrimaryAffectState)
     pad_current: PADVector = field(default_factory=lambda: PADVector(P=0.10, A=0.15, D=0.35))
@@ -156,6 +159,7 @@ class HeartState(SerializableModel):
             last_updated_utc=data.get("last_updated_utc", utc_now_iso()),
             is_resting=bool(data.get("is_resting", False)),
             rest_started_utc=data.get("rest_started_utc"),
+            total_turns=int(data.get("total_turns", 0)),
             neuro=NeuroState(**data.get("neuro", {})),
             primary_affects=PrimaryAffectState(**data.get("primary_affects", {})),
             pad_current=PADVector(**data.get("pad_current", {"P": 0.10, "A": 0.15, "D": 0.35})),
@@ -183,6 +187,7 @@ class EmotionalDirective(SerializableModel):
     max_words_per_bubble: int = 25
     conscience_override: Optional[str] = None
     tone_instruction: str = ""
+    emoji_palette: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -246,6 +251,12 @@ class SemanticFact(SerializableModel):
     object_val: str
     confidence: float = 0.8
     updated_utc: str = field(default_factory=utc_now_iso)
+    # v0.4.0 — provenans minimum (fondasi laporan ekspansi §4):
+    # source = asal fakta ("sleep_consolidation", "episode:<id>", ...);
+    # inference_status = "stated" (dinyatakan pengguna) | "inferred" (disimpulkan
+    # sistem) | "generative" (hasil generatif — mimpi TIDAK PERNAH jadi fakta).
+    source: str = ""
+    inference_status: str = "inferred"
 
 
 @dataclass
@@ -254,3 +265,72 @@ class ProceduralHabit(SerializableModel):
     trigger_pattern: str
     action_template: str
     success_count: int = 1
+
+
+# ---------------------------------------------------------------------------
+# Skema v0.4.0 — Curiosity, Niat mandiri, Mimpi, Ingatan foto
+# Semua disimpan di SQLite (cognitive_memory.db), bukan di JSON distribusi.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CuriosityQuestion(SerializableModel):
+    """Pertanyaan yang disimpan agent untuk user, ditanyakan di momen yang pas."""
+    question_id: str
+    text: str
+    topic: str = ""
+    created_at: str = field(default_factory=utc_now_iso)
+    priority: float = 0.5
+    status: str = "pending"  # pending | asked | dismissed
+    last_offered_at: Optional[str] = None
+    context_tags: List[str] = field(default_factory=list)
+    expires_at: Optional[str] = None
+    # Provenans: siapa yang mengusulkan pertanyaan ini ("supervisor" = agen LLM).
+    source: str = "supervisor"
+
+
+@dataclass
+class ReminderIntent(SerializableModel):
+    """Niat tindak lanjut / pengingat mandiri agent (berbasis jadwal/perkiraan)."""
+    intent_id: str
+    text: str
+    created_at: str = field(default_factory=utc_now_iso)
+    due_at: Optional[str] = None
+    trigger_condition: Optional[str] = None  # "time:<iso>" atau "keyword:<kata>"
+    source: str = "supervisor"  # "supervisor" | "local_rule"
+    priority: float = 0.5
+    status: str = "pending"  # pending | surfaced | completed | dismissed
+    last_surfaced_at: Optional[str] = None
+    repeat_policy: str = "none"  # none | daily
+    # "schedule" = berdasarkan jadwal/perkiraan; modul TIDAK mendeteksi langsung.
+    basis: str = "schedule"
+
+
+@dataclass
+class DreamRecord(SerializableModel):
+    """Ide kreatif dari sleep cycle — hasil GENERATIF, bukan kejadian nyata."""
+    dream_id: str
+    created_at: str = field(default_factory=utc_now_iso)
+    source_episode_ids: List[str] = field(default_factory=list)
+    theme: str = ""
+    dream_story: str = ""
+    idea_text: str = ""
+    category: str = "other"  # date_idea | photo_idea | other
+    novelty_score: float = 0.5
+    status: str = "stored"  # stored | surfaced | dismissed
+    sensitivity_tags: List[str] = field(default_factory=list)
+
+
+@dataclass
+class PhotoMoment(SerializableModel):
+    """Momen foto dari caption/metadata eksplisit — modul TIDAK melihat gambar."""
+    moment_id: str
+    timestamp: str = field(default_factory=utc_now_iso)
+    caption: str = ""
+    people: List[str] = field(default_factory=list)
+    place: str = ""
+    event_tags: List[str] = field(default_factory=list)
+    source_ref: str = ""  # referensi non-kredensial (misal nama file / id Drive)
+    consent_status: str = "unknown"  # granted | revoked | unknown
+    feeling: str = ""
+    when_label: str = ""
+    linked_episode_ids: List[str] = field(default_factory=list)

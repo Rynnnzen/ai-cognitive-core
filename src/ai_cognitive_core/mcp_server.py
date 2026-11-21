@@ -1,9 +1,13 @@
 import json
 import sys
+from typing import Optional
+from ai_cognitive_core import config
 from ai_cognitive_core.drive_bridge import DriveSyncBridge
 from ai_cognitive_core.heart.engine import HeartEngine
+from ai_cognitive_core.heart import phrase_bank
 from ai_cognitive_core.memory.manager import MemoryManager
 from ai_cognitive_core.memory.consolidation import run_sleep_consolidation
+from ai_cognitive_core.memory import migration
 from ai_cognitive_core.conscious.cycle import CognitiveCycleRunner
 from ai_cognitive_core.schemas import StimulusAppraisal
 
@@ -38,7 +42,7 @@ except ImportError:
                             "result": {
                                 "protocolVersion": "2024-11-05",
                                 "capabilities": {"tools": {}},
-                                "serverInfo": {"name": self.name, "version": "0.3.0"},
+                                "serverInfo": {"name": self.name, "version": "0.4.1"},
                             },
                         }
                         sys.stdout.write(json.dumps(resp) + "\n")
@@ -82,11 +86,16 @@ runner = CognitiveCycleRunner(heart, memory)
 
 
 @mcp.tool()
-def cognitive_perceive_and_think(user_input: str) -> str:
+def cognitive_perceive_and_think(user_input: str, turn_id: str = "") -> str:
     """
     Jalankan Fase 1 Siklus Kognitif Tertutup (Smart Pull Drive -> Time-Based Energy Recharge ->
     Texting Micro-Cues Appraisal -> Conscious GWT -> Bubble Chat Style Directive).
     Panggil tool ini SEBELUM menyusun jawaban ke pengguna, dan patuhi `bubble_style`!
+
+    v0.4.0: turn_id opsional mengaitkan perceive<->commit; retry perceive dengan
+    turn_id yang sama tidak menguras energi dua kali. Hasil dapat memuat
+    curiosity_prompt, proactive_intent, dream_idea, photo_reference (maks 1
+    masing-masing) dan diagnostics.
     """
     local_elapsed = heart.compute_local_elapsed_seconds()
     restored, drive_delta = bridge.pull_if_newer()
@@ -97,8 +106,17 @@ def cognitive_perceive_and_think(user_input: str) -> str:
     recharged_energy = 0.0
     if delta_sec > 0:
         recharged_energy = heart.apply_elapsed_time(delta_sec)
+        # v0.4.0: telemetri isi ulang (tanpa konten percakapan).
+        if recharged_energy != 0.0:
+            memory.record_energy_telemetry(
+                turn_id=turn_id or None,
+                recharge=recharged_energy,
+                energy_after=heart.state.neuro.energy,
+                noradrenaline=heart.state.neuro.noradrenaline,
+                cortisol=heart.state.neuro.cortisol,
+            )
 
-    result = runner.perceive_and_think(user_input, elapsed_seconds=delta_sec)
+    result = runner.perceive_and_think(user_input, elapsed_seconds=delta_sec, turn_id=turn_id or None)
     result["sync_info"] = {
         "restored_from_gdrive": restored,
         "elapsed_seconds_since_last_turn": round(delta_sec, 1),
@@ -118,11 +136,55 @@ def cognitive_commit_turn(
     goal_conduciveness: float = 0.1,
     coping_potential: float = 0.7,
     norm_compatibility: float = 0.2,
+    # --- v0.4.0: semua parameter baru opsional (kompatibel ke belakang) ---
+    turn_id: str = "",
+    propose_question: Optional[dict] = None,
+    create_reminder: Optional[dict] = None,
+    photo_moment: Optional[dict] = None,
+    curiosity_asked_id: str = "",
+    dismiss_curiosity_id: str = "",
+    dismiss_dream_id: str = "",
+    reminder_id: str = "",
+    reminder_action: str = "",
+    snooze_until: str = "",
+    photo_moment_id: str = "",
+    photo_moment_action: str = "",
+    photo_moment_correction: Optional[dict] = None,
+    # --- v0.4.1: sistem adaptasi (opsional, kompatibel ke belakang) ---
+    learn_habit: Optional[dict] = None,
+    habit_feedback: Optional[dict] = None,
 ) -> str:
     """
     Jalankan Fase 2 Siklus Kognitif Tertutup (Koreksi Appraisal SEC/OCC tanpa Double Energy Drain ->
     Simpan Episode + Somatic Tag PAD -> Backup Sinkron ke Google Drive).
+
+    v0.4.0: turn_id yang sama dengan perceive mengaitkan giliran; commit duplikat
+    ditolak tanpa menulis ulang. Parameter opsional lain menggerakkan fitur baru:
+    propose_question {text, topic, priority, context_tags, expires_at},
+    create_reminder {text, due_at, trigger_condition, priority, repeat_policy},
+    photo_moment {caption, people, place, event_tags, source_ref,
+    consent_status, timestamp} — caption eksplisit saja, modul tidak melihat gambar.
+    Aksi: curiosity_asked_id, dismiss_curiosity_id, dismiss_dream_id,
+    reminder_id + reminder_action (complete|snooze|dismiss) + snooze_until,
+    photo_moment_id + photo_moment_action (correct|delete) + photo_moment_correction.
     """
+    # v0.4.0: tolak commit duplikat SEBELUM heart.step agar appraisal tidak
+    # dikoreksi dua kali untuk giliran yang sama.
+    if turn_id:
+        marker = memory.get_turn_marker(turn_id)
+        if marker and marker["phase"] == "committed":
+            return json.dumps(
+                {
+                    "status": "duplicate_commit",
+                    "encoded_episode_id": marker["episode_id"],
+                    "current_energy": heart.state.neuro.energy,
+                    "mood_octant": heart.state.pad_current.octant_label(),
+                    "gdrive_synced": False,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+
     appraisal = StimulusAppraisal(
         novelty=max(-1.0, min(1.0, float(novelty))),
         goal_conduciveness=max(-1.0, min(1.0, float(goal_conduciveness))),
@@ -137,21 +199,68 @@ def cognitive_commit_turn(
     if inner_monologue:
         summary += f" [Monologue: {inner_monologue[:100]}]"
 
-    ep_node = memory.encode_episode(summary=summary, pad_vector=heart.state.pad_current)
-    # Push SINKRON (patch v0.3.1 Aya): async_mode=True terpotong di one-shot MCP
-    # call karena proses server keluar sebelum thread upload selesai. Dengan
-    # _file_id_cache, upload sinkron tetap cepat dan dijamin selesai.
-    synced = bridge.push_state(include_memory_db=True, async_mode=False)
+    # v0.4.0: episode + penanda giliran + aksi v0.4.0 dalam SATU transaksi.
+    actions = {
+        "propose_question": propose_question,
+        "create_reminder": create_reminder,
+        "photo_moment": photo_moment,
+        "curiosity_asked_id": curiosity_asked_id,
+        "dismiss_curiosity_id": dismiss_curiosity_id,
+        "dismiss_dream_id": dismiss_dream_id,
+        "reminder_id": reminder_id,
+        "reminder_action": reminder_action,
+        "snooze_until": snooze_until,
+        "photo_moment_id": photo_moment_id,
+        "photo_moment_action": photo_moment_action,
+        "photo_moment_correction": photo_moment_correction,
+    }
+    bundle = memory.commit_turn_bundle(
+        summary, heart.state.pad_current, turn_id=turn_id or None, actions=actions
+    )
+    if bundle.get("duplicate"):
+        return json.dumps(
+            {
+                "status": "duplicate_commit",
+                "encoded_episode_id": bundle.get("episode_id"),
+                "current_energy": heart.state.neuro.energy,
+                "mood_octant": directive.mood_octant,
+                "gdrive_synced": False,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    # v0.4.1: sistem adaptasi L5 (learn_habit & habit_feedback)
+    habit_outcomes = {}
+    if isinstance(learn_habit, dict) and learn_habit.get("trigger_pattern") and learn_habit.get("action_template"):
+        habit_outcomes["learned"] = memory.learn_procedural_habit(
+            learn_habit.get("trigger_pattern", ""),
+            learn_habit.get("action_template", ""),
+        )
+    if isinstance(habit_feedback, dict) and habit_feedback.get("habit_id"):
+        habit_outcomes["reinforced"] = memory.reinforce_procedural_habit(
+            habit_feedback["habit_id"],
+            delta=int(habit_feedback.get("delta", 1)),
+        )
+
+    # Push SINKRON (v0.4.1): DB penuh di-upload saat sleep_cycle, saat energi
+    # kritis (<= DRIVE_CRITICAL_ENERGY_THRESHOLD), atau jika DRIVE_PUSH_DB_ON_COMMIT=True.
+    critical_energy = heart.state.neuro.energy <= getattr(config, "DRIVE_CRITICAL_ENERGY_THRESHOLD", 0.10)
+    push_db = getattr(config, "DRIVE_PUSH_DB_ON_COMMIT", False) or critical_energy
+    synced = bridge.push_state(include_memory_db=push_db, async_mode=False)
 
     return json.dumps(
         {
             "status": "committed",
-            "encoded_episode_id": ep_node.node_id,
+            "encoded_episode_id": bundle["episode_id"],
             "updated_pad": heart.state.pad_current.model_dump(),
             "current_energy": heart.state.neuro.energy,
             "mood_octant": directive.mood_octant,
             "bubble_style": directive.bubble_style,
             "gdrive_synced": synced,
+            "gdrive_db_included": push_db,
+            "v040_outcomes": bundle.get("outcomes", {}),
+            "habit_outcomes": habit_outcomes,
         },
         ensure_ascii=False,
         indent=2,
@@ -188,11 +297,30 @@ def cognitive_sleep_cycle(workspace_dir: str = "") -> str:
 
 @mcp.tool()
 def cognitive_get_status() -> str:
-    """Lihat snapshot lengkap HeartState (termasuk time-based energy charging terkini)."""
+    """Lihat snapshot lengkap HeartState (termasuk time-based energy charging terkini).
+
+    v0.4.0: ditambah kunci "v040" berisi hitungan fitur (tanpa isi pribadi),
+    ringkasan telemetri energi, flag fitur, dan versi skema.
+    """
     elapsed = heart.compute_local_elapsed_seconds()
     if elapsed > 30:
         heart.apply_elapsed_time(elapsed)
-    return heart.state.model_dump_json(indent=2)
+    snapshot = heart.state.model_dump()
+    snapshot["v040"] = {
+        "counts": memory.v040_counts(),
+        "energy_telemetry": memory.telemetry_summary(),
+        "schema_version": migration.get_schema_version(str(bridge.db_path)),
+        "phrase_bank_version": phrase_bank.PHRASE_BANK_VERSION,
+        "features_enabled": {
+            "curiosity": config.ENABLE_CURIOSITY,
+            "reminders": config.ENABLE_REMINDERS,
+            "dreams": config.ENABLE_DREAMS,
+            "photo_memory": config.ENABLE_PHOTO_MEMORY,
+            "phrase_bank": config.ENABLE_PHRASE_BANK,
+            "energy_telemetry": config.ENABLE_ENERGY_TELEMETRY,
+        },
+    }
+    return json.dumps(snapshot, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -209,7 +337,7 @@ def cognitive_configure_persona(
     heart.state.pad_baseline = PADVector(P=baseline_p, A=baseline_a, D=baseline_d).clamp()
     heart.state.emotional_inertia_pi1 = max(0.05, min(0.90, float(inertia_pi1)))
     heart.save()
-    synced = bridge.push_state(include_memory_db=False, async_mode=True)
+    synced = bridge.push_state(include_memory_db=False, async_mode=False)
     return json.dumps(
         {
             "status": "persona_updated",
