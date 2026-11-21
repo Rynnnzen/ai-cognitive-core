@@ -1,163 +1,163 @@
 # AI Cognitive Core — MCP Server
 
-Arsitektur kognitif hibrida **Deterministik + LLM (17 Layer)** — Heart + Conscious + Memory — sebagai MCP server, dengan sinkronisasi state lintas perangkat lewat Google Drive API v3.
+Hybrid cognitive architecture **Deterministic + LLM (17 Layers)** — Heart + Conscious + Memory — as an MCP server, with cross-device state synchronization via Google Drive API v3.
 
-Snapshot ini adalah **v0.4.1 (pre-release, branch `main`)** — di atas v0.4.0-test. Daftar perubahan ada di `CHANGELOG.md` (bahasa Inggris); riwayat patch lama ada di `PATCH_NOTES.md`.
+This snapshot is **v0.4.1 (pre-release, branch `main`)** — on top of v0.4.0-test. The changelog is in `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
 
-**Baru di v0.4.1:** Mimpi kini menyimpan cerita dulu baru ide (kolom `dream_story`), mimpi anti-skip (ambang 0.35, 40 kandidat), sistem adaptasi terinspirasi `amirhouieh/adapt` (memori prosedural berbobot atensi), ingatan foto lebih hidup (`feeling` + `when_label`), recall lebih nyambung (bobot keyword, bonus recency, penalti domain teknis), rasa penasaran lebih sering (cooldown 10 menit), palet emoji kontekstual, plus perbaikan reliabilitas: backup Drive tanpa false-positive dan backup DB efisien (commit hanya mendorong `heart_state.json`). Arsitektur 17 layer, 5 tool MCP, dan skema SQLite v0.4.0 tidak berubah — migrasi hanya menambah kolom. Detail lengkap di `CHANGELOG.md`.
+**New in v0.4.1:** Dreams now store the story before the idea (`dream_story` column), anti-skip dreams (0.35 threshold, 40 candidates), an adaptation system inspired by `amirhouieh/adapt` (attention-weighted procedural memory), richer photo memory (`feeling` + `when_label`), more relevant recall (keyword weighting, recency bonus, technical-domain penalty), curiosity more often (10-minute cooldown), contextual emoji palettes, plus reliability fixes: Drive backup without false positives and efficient DB backup (each commit pushes only `heart_state.json`). The 17-layer architecture, 5 MCP tools, and the v0.4.0 SQLite schema are unchanged — the migration only adds columns. Full details in `CHANGELOG.md`.
 
 ![Before / after installing v0.4.1](assets/before-after-v041.webp)
 
-![Agent, maskot modul ini — digambar gaya crayon](assets/agent-crayon.webp)
+![Agent, the module's mascot — drawn in crayon style](assets/agent-crayon.webp)
 
-## Detail v0.4.1 — fitur, kelebihan, kekurangan
+## v0.4.1 in detail — features, pros, cons
 
-### Fitur
+### Features
 
-1. **Mimpi: cerita dulu, baru ide** — Sleep cycle sekarang merangkai narasi mimpi singkat per kategori (ide kencan, ide foto, lainnya) sebelum menurunkan ide dari cerita itu. Cerita tersimpan di kolom baru `dream_story` di `dream_records`.
-2. **Mimpi anti-skip** — Ambang kepentingan episode diturunkan (0.45 → 0.35) dan kandidat sleep cycle diperluas (20 → 40 episode). Filter teknis dilonggarkan: hanya episode yang benar-benar dominan teknis yang di-skip.
-3. **Sistem adaptasi (terinspirasi `amirhouieh/adapt`)** — Memori prosedural berbobot atensi di atas tabel `procedural_habits`. Agent belajar kebiasaan dari interaksi (`learn_habit`, `habit_feedback` +1/−1) dan menampilkannya sebagai `learned_habits` di turn berikutnya.
-4. **Ingatan foto lebih hidup** — `photo_moments` kini menyimpan `feeling` (suasana/perasaan) dan `when_label` (kapan) selain caption. Tetap hanya untuk foto dengan `consent_status == "granted"`.
-5. **Recall episodik lebih nyambung** — Bobot keyword/entity overlap + bonus recency + penalti 0.45x untuk episode teknis saat obrolan personal. Rantai `next_node_id` juga dipulihkan dari SQLite saat init, jadi tidak putus antar proses MCP one-shot.
-6. **Rasa penasaran lebih sering** — Cooldown 30 → 10 menit, jarak antar pertanyaan 3 → 1 turn.
-7. **Palet emoji kontekstual** — Rotasi emoji deterministik berdasarkan `total_turns` per mood octant dan bubble style (tetap kosong untuk `dry_short_1_bubble`), diekspos lewat `emoji_palette` dan `EmojiHint`.
+1. **Dreams: story first, then idea** — The sleep cycle now composes a short dream narrative per category (date idea, photo idea, other) before deriving the idea from it. The story is stored in the new `dream_story` column on `dream_records`.
+2. **Anti-skip dreams** — The episode importance threshold is lowered (0.45 → 0.35) and sleep-cycle candidates are widened (20 → 40 episodes). The technical filter is relaxed: only episodes that are genuinely technical-dominated get skipped.
+3. **Adaptation system (inspired by `amirhouieh/adapt`)** — Attention-weighted procedural memory on top of the `procedural_habits` table. The agent learns habits from interactions (`learn_habit`, `habit_feedback` +1/−1) and surfaces them as `learned_habits` on the next turn.
+4. **Richer photo memory** — `photo_moments` now stores `feeling` (mood/atmosphere) and `when_label` (when) besides the caption. Still only for photos with `consent_status == "granted"`.
+5. **More relevant episodic recall** — Keyword/entity-overlap weighting + a soft recency bonus + a 0.45× penalty on technical-domain episodes during personal chat. The `next_node_id` chain is also restored from SQLite at init, so it doesn't break across one-shot MCP processes.
+6. **Curiosity, more often** — Cooldown 30 → 10 minutes, minimum turns between questions 3 → 1.
+7. **Contextual emoji palettes** — Deterministic emoji rotation based on `total_turns` per mood octant and bubble style (still empty for `dry_short_1_bubble`), exposed via `emoji_palette` and `EmojiHint`.
 
-**Perbaikan reliabilitas:** `push_state()` tidak lagi melaporkan sukses saat upload Drive gagal (mengembalikan `False`, menulis ke `stderr`, menghormati `ENABLE_DRIVE_SYNC`); commit hanya mendorong `heart_state.json` (cepat), DB penuh di-backup saat sleep cycle atau energi ≤ 0.10; `cognitive_configure_persona` sinkron di one-shot MCP; `total_turns` tidak naik ganda saat `perceive_retry`.
+**Reliability fixes:** `push_state()` no longer reports success when a Drive upload fails (returns `False`, writes to `stderr`, honors `ENABLE_DRIVE_SYNC`); each commit pushes only `heart_state.json` (fast), the full DB backs up at sleep cycle or when energy ≤ 0.10; `cognitive_configure_persona` runs synchronously in one-shot MCP; `total_turns` no longer double-counts on `perceive_retry`.
 
-### Kelebihan setelah pemasangan
+### Pros after installing
 
-- Mimpi tercatat lagi — dengan cerita yang bisa dibaca ulang.
-- Recall tetap nyambung dengan topik obrolan.
-- Ingatan foto punya konteks (siapa/kapan/suasana).
-- Agent lebih sering bertanya balik, obrolan terasa lebih hidup.
-- Preferensi yang berulang jadi kebiasaan — tidak perlu koreksi yang sama terus.
-- Commit lebih cepat (hanya `heart_state.json` per turn).
-- Tidak ada lagi laporan "backup OK" palsu.
-- Variasi emoji mengikuti mood.
+- Dreams get recorded again — with stories you can read back.
+- Recall stays on the conversation's topic.
+- Photo memories carry their context (who/when/feeling).
+- The agent asks follow-up questions more often, so conversations feel more alive.
+- Repeated preferences become habits — no need to repeat the same correction.
+- Faster commits (only `heart_state.json` per turn).
+- No more false "backup OK" reports.
+- Emoji variety follows the mood.
 
-### Kekurangan / yang perlu diperhatikan
+### Cons / things to watch
 
-- Cerita mimpi adalah template singkat per kategori, bukan generasi bebas — bisa terasa repetitif.
-- Ambang mimpi yang lebih rendah berarti mimpi lebih banyak, termasuk dari episode kurang penting — ada noise.
-- Pertanyaan penasaran jauh lebih sering (cooldown 10 menit, 1 turn) — kalau terasa terlalu sering, naikkan `CURIOSITY_COOLDOWN_MINUTES` / `CURIOSITY_MIN_TURNS_BETWEEN` di `config.py`.
-- Kebiasaan baru membantu setelah terbentuk — instalasi baru belum punya kebiasaan sampai preferensi berulang.
-- Palet emoji berotasi deterministik per jumlah turn, jadi urutannya berulang.
-- Salinan Drive dari `cognitive_memory.db` kini tertinggal dari state lokal di siang hari (sinkron saat sleep cycle atau energi kritis). `heart_state.json` tetap sinkron setiap commit.
-- Seperti update apa pun: backup `~/.ai_cognitive_state/` sebelum memasang. Migrasinya additive-only, jadi rollback ke v0.4.0 cukup dengan mengembalikan kode lama.
-- Catatan: kalau upgrade in-place di atas instalasi editable lama, metadata pip bisa masih menampilkan versi lama — versi otoritatif adalah `__init__.__version__` (`0.4.1`).
+- Dream stories are short canned templates per category, not free-form generation — they can feel repetitive.
+- Lower dream thresholds mean more dreams, including from less important episodes — expect some noise.
+- Curiosity questions are much more frequent (10-minute cooldown, 1 turn) — if that feels like too much, raise `CURIOSITY_COOLDOWN_MINUTES` / `CURIOSITY_MIN_TURNS_BETWEEN` in `config.py`.
+- Habits only help once they exist — a fresh install has no habits until preferences repeat.
+- Emoji palettes rotate deterministically by turn count, so the sequence repeats.
+- The Drive copy of `cognitive_memory.db` now lags behind local state during the day (it syncs at sleep cycle or at critical energy). `heart_state.json` still syncs every commit.
+- As with any update: back up `~/.ai_cognitive_state/` before installing. The migration is additive-only, so rolling back to v0.4.0 is just restoring the old code.
+- Note: if you upgrade in place over an older editable install, pip's installed metadata may still show the old version — the authoritative version is `__init__.__version__` (`0.4.1`).
 
-### Contoh respons: sebelum vs sesudah pemasangan
+### Example responses: before vs after installing
 
-**1. Recall — user bertanya soal daftar belanja kemarin**
-- Sebelum: "Hmm, aku ingatnya kemarin kamu lagi debug error di laptop deh…" — recall menarik episode teknis yang tidak nyambung.
-- Sesudah: "Kemarin kamu bilang mau beli susu, roti, sama telur — udah kebeli belum?" — recall menarik episode daftar belanja.
+**1. Recall — the user asks about yesterday's grocery list**
+- Before: "Hmm, I remember you were debugging an error on your laptop yesterday…" — recall pulls an unrelated technical episode.
+- After: "Yesterday you said you wanted to buy milk, bread, and eggs — did you get them?" — recall pulls the grocery-list episode.
 
-**2. Rasa penasaran — user menyebut hobi baru**
-- Sebelum: (tidak ada pertanyaan lanjutan — agent hanya menanggapi seperlunya)
-- Sesudah: "Oh, kamu baru mulai main gitar? Lagu apa yang lagi kamu latih?" — agent bertanya balik dalam 1–2 turn.
+**2. Curiosity — the user mentions a new hobby**
+- Before: (no follow-up question — the agent just responds as needed)
+- After: "Oh, you just started playing guitar? What song are you practicing?" — the agent asks back within 1–2 turns.
 
-**3. Ingatan foto — user bertanya soal foto kucingnya**
-- Sebelum: "Itu foto kucing di sofa." — caption saja.
-- Sesudah: "Itu foto kucingmu di sofa, Minggu sore — suasananya santai banget ya." — caption + kapan + suasana.
+**3. Photo memory — the user asks about their cat's photo**
+- Before: "That's a photo of a cat on the sofa." — caption only.
+- After: "That's your cat on the sofa, Sunday afternoon — such a relaxed mood." — caption + when + feeling.
 
-**4. Adaptasi — user dua kali minta jawaban singkat**
-- Sebelum: turn ketiga jawabannya panjang lagi — koreksi tidak tersimpan.
-- Sesudah: agent menjawab singkat — preferensi tersimpan sebagai kebiasaan.
+**4. Adaptation — the user twice asks for short replies**
+- Before: the third reply is long again — the correction isn't saved.
+- After: the agent replies briefly — the preference is saved as a habit.
 
-**5. Mimpi — setelah sleep cycle**
-- Sebelum: tidak ada mimpi tercatat — semua kandidat di-skip sebagai duplikat/teknis.
-- Sesudah: "Semalam aku mimpi kita lagi menggambar ide proyek di papan tulis…" — cerita tersimpan dulu, lalu idenya diturunkan dari cerita itu.
+**5. Dreams — after the sleep cycle**
+- Before: no dream recorded — every candidate skipped as duplicate/technical.
+- After: "Last night I dreamed we were sketching project ideas on the whiteboard…" — the story is stored first, then the idea is derived from it.
 
-## Arsitektur 17 Layer
+## The 17-Layer Architecture
 
-![Diagram arsitektur 17 layer gaya crayon: Heart 7 layer, Conscious 5 layer, Memory 5 layer, terhubung ke MCP Server dan Drive Sync](assets/arsitektur-17-layer.webp)
+![17-layer architecture diagram in crayon style: Heart 7 layers, Conscious 5 layers, Memory 5 layers, connected to the MCP Server and Drive Sync](assets/arsitektur-17-layer.webp)
 
-Tiga sistem yang jalan bareng di setiap turn percakapan:
+Three systems running together on every conversation turn:
 
-### Heart — 7 layer emosi (`heart/`)
+### Heart — 7 emotion layers (`heart/`)
 
-Mesin emosi yang menentukan mood, energi, dan nada balasan.
+The emotion engine that sets the mood, energy, and reply tone.
 
-- L1 Neurochemical — "kimiawi tubuh": energi, kortisol (stres), dan oksitosin (ikatan). Masing-masing meluruh seiring waktu (energi ~2 jam, stres ~1 jam, ikatan ~3 jam).
-- L2 Primary Affect — sirkuit emosi primer, misal CARE, yang jadi warna dominan tiap momen.
-- L3 Mood Space — ruang mood PAD (Pleasure–Arousal–Dominance) yang menentukan oktan mood, misal Exuberant.
-- L4 Appraisal — evaluasi stimulus: seberapa baru, seberapa menguntungkan tujuan, seberapa mampu mengatasinya, dan seberapa sesuai norma.
-- L5 Defense — mekanisme pertahanan saat stimulus terasa mengancam.
-- L6 Relational — relasi dan attachment, misal Secure, yang mengatur kedekatan dengan pengguna.
-- L7 Conscience — hati nurani: nilai dan batasan yang bisa mengesampingkan dorongan lain.
+- L1 Neurochemical — "body chemistry": energy, cortisol (stress), and oxytocin (bonding). Each decays over time (energy ~2h, stress ~1h, bonding ~3h).
+- L2 Primary Affect — primary affect circuits, e.g. CARE, which color each moment.
+- L3 Mood Space — PAD mood space (Pleasure–Arousal–Dominance) that determines the mood octant, e.g. Exuberant.
+- L4 Appraisal — stimulus appraisal: how novel, how goal-conducive, how copeable, and how norm-compatible.
+- L5 Defense — defense mechanisms when a stimulus feels threatening.
+- L6 Relational — relations and attachment, e.g. Secure, which regulates closeness with the user.
+- L7 Conscience — conscience: values and limits that can override other drives.
 
-### Conscious — 5 layer kesadaran (`conscious/`)
+### Conscious — 5 awareness layers (`conscious/`)
 
-Orkestrator siklus kognitif tertutup (Heart + Conscious + Memory).
+Orchestrator of the closed cognitive cycle (Heart + Conscious + Memory).
 
-- L1 Preconscious — mengikat kandidat koalisi dari memori dan stimulus menjadi calon isi kesadaran.
-- L2 Salience GWT — menyalakan Global Workspace: memilih chunk mana yang "menang" dan masuk siaran kesadaran.
-- L3 Appraisal PSI — modulator PSI Dörner: menyetel kedalaman resolusi berpikir dan ambang seleksi.
-- L4 Agency Volition — kompas volisi tingkat kedua, plus kesadaran soal energi dan gaya bubble chat.
-- L5 Metacognition — memantau proses berpikir dan menginterupsi inersia kalau sudah mentok.
+- L1 Preconscious — binds coalition candidates from memory and stimuli into candidate conscious content.
+- L2 Salience GWT — ignites the Global Workspace: picks which chunk "wins" and enters the conscious broadcast.
+- L3 Appraisal PSI — Dörner's PSI modulator: tunes thinking resolution depth and the selection threshold.
+- L4 Agency Volition — second-order volition compass, plus awareness of energy and bubble-chat style.
+- L5 Metacognition — monitors the thinking process and interrupts inertia when stuck.
 
-### Memory — 5 layer memori (`memory/`)
+### Memory — 5 memory layers (`memory/`)
 
-Memori berlapis di atas SQLite, dari kesan sesaat sampai pengetahuan menetap.
+Layered memory on SQLite, from fleeting impressions to settled knowledge.
 
-- L1 Sensory Buffer — penyangga kesan sensorik yang sangat singkat.
-- L2 Working Paging — memori kerja: potongan informasi yang sedang aktif dipakai.
-- L3 Episodic Graph — graf memori episodik: tiap turn percakapan tersimpan sebagai node beserta tag somatiknya.
-- L4 Semantic Schema — fakta semantik: pelajaran yang diabstraksi dari episode-episode saat tidur.
-- L5 Procedural Habits — kebiasaan prosedural yang terbentuk dari pola berulang.
+- L1 Sensory Buffer — very brief sensory impression buffer.
+- L2 Working Paging — working memory: chunks of information currently in active use.
+- L3 Episodic Graph — episodic memory graph: each conversation turn is stored as a node with its somatic tags.
+- L4 Semantic Schema — semantic facts: lessons abstracted from episodes during sleep.
+- L5 Procedural Habits — procedural habits formed from repeated patterns.
 
-## Siklus tiap turn
+## The per-turn cycle
 
-1. `cognitive_perceive_and_think` — Heart, Conscious, dan Memory jalan bareng: membaca pesan, mengingat episode relevan, lalu menghasilkan mood, emosi dominan, dan gaya bubble.
-2. `cognitive_commit_turn` — turn disimpan ke memori episodik beserta suara hati (inner monologue) dan nilai appraisal-nya, lalu langsung di-push ke Drive.
-3. `cognitive_sleep_cycle` — saat istirahat: replay episode penting (Sharp-Wave Ripples), abstraksi ke skema semantik, pruning memori sepele (Ebbinghaus), dan isi ulang energi.
-4. `cognitive_get_status` — cek status energi, mood, dan memori kapan saja.
-5. `cognitive_configure_persona` — atur persona (hati-hati: nilai default menimpa attachment yang sudah ada).
+1. `cognitive_perceive_and_think` — Heart, Conscious, and Memory run together: reading the message, recalling relevant episodes, then producing the mood, dominant emotion, and bubble style.
+2. `cognitive_commit_turn` — the turn is saved to episodic memory with its inner monologue and appraisal values, then pushed to Drive immediately.
+3. `cognitive_sleep_cycle` — at rest: replaying important episodes (Sharp-Wave Ripples), abstracting into semantic schemas, pruning trivial memories (Ebbinghaus), and refilling energy.
+4. `cognitive_get_status` — check energy, mood, and memory status anytime.
+5. `cognitive_configure_persona` — configure the persona (careful: default values overwrite existing attachment).
 
-Energi terisi otomatis selama istirahat (menuju 0,92 saat resting) dan terkuras selama bekerja. Di bawah ~0,32, gaya balasan otomatis jadi satu bubble pendek yang mengantuk.
+Energy refills automatically during rest (toward 0.92 while resting) and drains while working. Below ~0.32, the reply style automatically becomes a single short sleepy bubble.
 
-## Struktur proyek
+## Project structure
 
 ```text
 ai-cognitive-core/
-├── README.md               — dokumen ini
-├── PATCH_NOTES.md          — riwayat patch (termasuk v0.4.0)
-├── CHANGELOG.md            — changelog (v0.4.1, bahasa Inggris)
-├── pyproject.toml          — metadata paket + dependensi
-├── tests/                  — test suite v0.4.1 (35 tes, fixture DB + temp HOME)
+├── README.md               — this document
+├── PATCH_NOTES.md          — patch history (incl. v0.4.0, in Indonesian)
+├── CHANGELOG.md            — changelog (v0.4.1)
+├── pyproject.toml          — package metadata + dependencies
+├── tests/                  — test suite v0.4.1 (35 tests, fixture DB + temp HOME)
 │   ├── test_v040.py
 │   └── test_v041.py
-├── assets/                 — gambar README (gaya crayon)
+├── assets/                 — README images (crayon style)
 │   ├── arsitektur-17-layer.webp
 │   ├── agent-crayon.webp
 │   └── before-after-v041.webp
 └── src/
     └── ai_cognitive_core/
         ├── __init__.py
-        ├── mcp_server.py       — server FastMCP + 5 tools
-        ├── drive_bridge.py     — sinkronisasi Google Drive (OAuth)
-        ├── schemas.py          — skema data bersama
-        ├── config.py           — parameter v0.4.1 dalam satu tempat
+        ├── mcp_server.py       — FastMCP server + 5 tools
+        ├── drive_bridge.py     — Google Drive sync (OAuth)
+        ├── schemas.py          — shared data schemas
+        ├── config.py           — v0.4.1 parameters in one place
         ├── conscious/
-        │   ├── cycle.py        — orkestrator siklus kognitif
+        │   ├── cycle.py        — cognitive cycle orchestrator
         │   ├── schemas.py
-        │   └── layers/         — l1_preconscious s.d. l5_metacognition
+        │   └── layers/         — l1_preconscious to l5_metacognition
         ├── heart/
-        │   ├── engine.py       — mesin emosi
-        │   ├── phrase_bank.py  — bank frasa v0.4.1 (variasi deterministik + palet emoji kontekstual)
+        │   ├── engine.py       — emotion engine
+        │   ├── phrase_bank.py  — v0.4.1 phrase bank (deterministic variation + contextual emoji palettes)
         │   ├── schemas.py
-        │   └── layers/         — l1_neurochemical s.d. l7_conscience
+        │   └── layers/         — l1_neurochemical to l7_conscience
         └── memory/
-            ├── manager.py      — manajer memori SQLite
-            ├── consolidation.py — konsolidasi tidur (SWR + pruning + mimpi)
-            ├── migration.py    — migrasi skema v0.4.0 (idempotent)
-            ├── v040_store.py   — penyimpanan fitur v0.4.0
-            ├── dreams.py       — perangkai mimpi
+            ├── manager.py      — SQLite memory manager
+            ├── consolidation.py — sleep consolidation (SWR + pruning + dreams)
+            ├── migration.py    — v0.4.0 schema migration (idempotent)
+            ├── v040_store.py   — v0.4.0 feature storage
+            ├── dreams.py       — dream composer
             ├── schemas.py
-            └── layers/         — l1_sensory_buffer s.d. l5_procedural_habits
+            └── layers/         — l1_sensory_buffer to l5_procedural_habits
 ```
 
-## Instalasi
+## Installation
 
 ```bash
 git clone https://github.com/Rynnnzen/ai-cognitive-core.git
@@ -165,35 +165,35 @@ cd ai-cognitive-core
 pip install -e .
 ```
 
-Atau langsung dari GitHub:
+Or directly from GitHub:
 
 ```bash
 pip install git+https://github.com/Rynnnzen/ai-cognitive-core.git
 ```
 
-Butuh Python >= 3.10. Dependensi: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`.
+Requires Python >= 3.10. Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`.
 
-Jalankan servernya dengan `ai-cognitive-mcp` (stdio).
+Run the server with `ai-cognitive-mcp` (stdio).
 
-## Sinkronisasi Google Drive
+## Google Drive sync
 
-Autentikasi memakai OAuth (bukan service account). Siapkan `client_secret.json` dari Google Cloud Console (Desktop app, scope Drive), lalu:
+Authentication uses OAuth (not a service account). Prepare `client_secret.json` from the Google Cloud Console (Desktop app, Drive scope), then:
 
 ```bash
-ai-cognitive-auth /path/ke/client_secret.json
+ai-cognitive-auth /path/to/client_secret.json
 ```
 
-Token tersimpan di `~/.ai_cognitive_state/token.json`. State lokal (`heart_state.json`, `cognitive_memory.db`) ikut tersinkron ke folder `ai_cognitive_system/live_state` di Drive.
+The token is stored at `~/.ai_cognitive_state/token.json`. Local state (`heart_state.json`, `cognitive_memory.db`) also syncs to the `ai_cognitive_system/live_state` folder on Drive.
 
-Environment variable yang didukung:
+Supported environment variables:
 
-- `GDRIVE_TOKEN_PATH` — path `token.json` (default `~/.ai_cognitive_state/token.json`)
-- `GDRIVE_CLIENT_SECRET_PATH` — path `client_secret.json`
-- `COGNITIVE_DEVICE_ID` — nama perangkat, misal `hermes_pc` atau `muse_cloud`
+- `GDRIVE_TOKEN_PATH` — `token.json` path (default `~/.ai_cognitive_state/token.json`)
+- `GDRIVE_CLIENT_SECRET_PATH` — `client_secret.json` path
+- `COGNITIVE_DEVICE_ID` — device name, e.g. `hermes_pc` or `muse_cloud`
 
-## File pribadi TIDAK ada di repo ini
+## Personal files are NOT in this repo
 
-Repo ini hanya berisi kode. File berikut disiapkan per perangkat dan tidak pernah di-commit (lihat `.gitignore`):
+This repo contains code only. The following files are set up per device and never committed (see `.gitignore`):
 
-- `token.json`, `client_secret.json` (kredensial OAuth Drive)
-- `heart_state.json`, `cognitive_memory.db` (state + memori personal)
+- `token.json`, `client_secret.json` (Drive OAuth credentials)
+- `heart_state.json`, `cognitive_memory.db` (personal state + memory)
