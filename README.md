@@ -97,6 +97,8 @@ Agent: Yesterday you said you wanted to buy milk, bread, and eggs — did you ge
 
 ### 5. Curiosity, more often
 
+<img src="assets/curiosity.webp" alt="The agent asking a follow-up question" width="400">
+
 Cooldown 30 → 10 minutes, minimum turns between questions 3 → 1 — the agent asks follow-up questions more often.
 
 **Example chat**
@@ -242,7 +244,8 @@ ai-cognitive-core/
 │   ├── dream-story.webp
 │   ├── adaptation.webp
 │   ├── photo-memory.webp
-│   └── recall.webp
+│   ├── recall.webp
+│   └── curiosity.webp
 └── src/
     └── ai_cognitive_core/
         ├── __init__.py
