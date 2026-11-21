@@ -10,6 +10,64 @@ Snapshot ini adalah **v0.4.1 (pre-release, branch `main`)** — di atas v0.4.0-t
 
 ![Agent, maskot modul ini — digambar gaya crayon](assets/agent-crayon.webp)
 
+## Detail v0.4.1 — fitur, kelebihan, kekurangan
+
+### Fitur
+
+1. **Mimpi: cerita dulu, baru ide** — Sleep cycle sekarang merangkai narasi mimpi singkat per kategori (ide kencan, ide foto, lainnya) sebelum menurunkan ide dari cerita itu. Cerita tersimpan di kolom baru `dream_story` di `dream_records`.
+2. **Mimpi anti-skip** — Ambang kepentingan episode diturunkan (0.45 → 0.35) dan kandidat sleep cycle diperluas (20 → 40 episode). Filter teknis dilonggarkan: hanya episode yang benar-benar dominan teknis yang di-skip.
+3. **Sistem adaptasi (terinspirasi `amirhouieh/adapt`)** — Memori prosedural berbobot atensi di atas tabel `procedural_habits`. Agent belajar kebiasaan dari interaksi (`learn_habit`, `habit_feedback` +1/−1) dan menampilkannya sebagai `learned_habits` di turn berikutnya.
+4. **Ingatan foto lebih hidup** — `photo_moments` kini menyimpan `feeling` (suasana/perasaan) dan `when_label` (kapan) selain caption. Tetap hanya untuk foto dengan `consent_status == "granted"`.
+5. **Recall episodik lebih nyambung** — Bobot keyword/entity overlap + bonus recency + penalti 0.45x untuk episode teknis saat obrolan personal. Rantai `next_node_id` juga dipulihkan dari SQLite saat init, jadi tidak putus antar proses MCP one-shot.
+6. **Rasa penasaran lebih sering** — Cooldown 30 → 10 menit, jarak antar pertanyaan 3 → 1 turn.
+7. **Palet emoji kontekstual** — Rotasi emoji deterministik berdasarkan `total_turns` per mood octant dan bubble style (tetap kosong untuk `dry_short_1_bubble`), diekspos lewat `emoji_palette` dan `EmojiHint`.
+
+**Perbaikan reliabilitas:** `push_state()` tidak lagi melaporkan sukses saat upload Drive gagal (mengembalikan `False`, menulis ke `stderr`, menghormati `ENABLE_DRIVE_SYNC`); commit hanya mendorong `heart_state.json` (cepat), DB penuh di-backup saat sleep cycle atau energi ≤ 0.10; `cognitive_configure_persona` sinkron di one-shot MCP; `total_turns` tidak naik ganda saat `perceive_retry`.
+
+### Kelebihan setelah pemasangan
+
+- Mimpi tercatat lagi — dengan cerita yang bisa dibaca ulang.
+- Recall tetap nyambung dengan topik obrolan.
+- Ingatan foto punya konteks (siapa/kapan/suasana).
+- Agent lebih sering bertanya balik, obrolan terasa lebih hidup.
+- Preferensi yang berulang jadi kebiasaan — tidak perlu koreksi yang sama terus.
+- Commit lebih cepat (hanya `heart_state.json` per turn).
+- Tidak ada lagi laporan "backup OK" palsu.
+- Variasi emoji mengikuti mood.
+
+### Kekurangan / yang perlu diperhatikan
+
+- Cerita mimpi adalah template singkat per kategori, bukan generasi bebas — bisa terasa repetitif.
+- Ambang mimpi yang lebih rendah berarti mimpi lebih banyak, termasuk dari episode kurang penting — ada noise.
+- Pertanyaan penasaran jauh lebih sering (cooldown 10 menit, 1 turn) — kalau terasa terlalu sering, naikkan `CURIOSITY_COOLDOWN_MINUTES` / `CURIOSITY_MIN_TURNS_BETWEEN` di `config.py`.
+- Kebiasaan baru membantu setelah terbentuk — instalasi baru belum punya kebiasaan sampai preferensi berulang.
+- Palet emoji berotasi deterministik per jumlah turn, jadi urutannya berulang.
+- Salinan Drive dari `cognitive_memory.db` kini tertinggal dari state lokal di siang hari (sinkron saat sleep cycle atau energi kritis). `heart_state.json` tetap sinkron setiap commit.
+- Seperti update apa pun: backup `~/.ai_cognitive_state/` sebelum memasang. Migrasinya additive-only, jadi rollback ke v0.4.0 cukup dengan mengembalikan kode lama.
+- Catatan: kalau upgrade in-place di atas instalasi editable lama, metadata pip bisa masih menampilkan versi lama — versi otoritatif adalah `__init__.__version__` (`0.4.1`).
+
+### Contoh respons: sebelum vs sesudah pemasangan
+
+**1. Recall — user bertanya soal daftar belanja kemarin**
+- Sebelum: "Hmm, aku ingatnya kemarin kamu lagi debug error di laptop deh…" — recall menarik episode teknis yang tidak nyambung.
+- Sesudah: "Kemarin kamu bilang mau beli susu, roti, sama telur — udah kebeli belum?" — recall menarik episode daftar belanja.
+
+**2. Rasa penasaran — user menyebut hobi baru**
+- Sebelum: (tidak ada pertanyaan lanjutan — agent hanya menanggapi seperlunya)
+- Sesudah: "Oh, kamu baru mulai main gitar? Lagu apa yang lagi kamu latih?" — agent bertanya balik dalam 1–2 turn.
+
+**3. Ingatan foto — user bertanya soal foto kucingnya**
+- Sebelum: "Itu foto kucing di sofa." — caption saja.
+- Sesudah: "Itu foto kucingmu di sofa, Minggu sore — suasananya santai banget ya." — caption + kapan + suasana.
+
+**4. Adaptasi — user dua kali minta jawaban singkat**
+- Sebelum: turn ketiga jawabannya panjang lagi — koreksi tidak tersimpan.
+- Sesudah: agent menjawab singkat — preferensi tersimpan sebagai kebiasaan.
+
+**5. Mimpi — setelah sleep cycle**
+- Sebelum: tidak ada mimpi tercatat — semua kandidat di-skip sebagai duplikat/teknis.
+- Sesudah: "Semalam aku mimpi kita lagi menggambar ide proyek di papan tulis…" — cerita tersimpan dulu, lalu idenya diturunkan dari cerita itu.
+
 ## Arsitektur 17 Layer
 
 ![Diagram arsitektur 17 layer gaya crayon: Heart 7 layer, Conscious 5 layer, Memory 5 layer, terhubung ke MCP Server dan Drive Sync](assets/arsitektur-17-layer.webp)
