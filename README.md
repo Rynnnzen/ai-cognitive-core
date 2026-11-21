@@ -6,6 +6,37 @@ This snapshot is **v0.4.1 (pre-release, branch `main`)** — on top of v0.4.0-te
 
 <img src="assets/agent-crayon.webp" alt="Agent, the module's mascot" width="240">
 
+## Quickstart
+
+Requires Python >= 3.10.
+
+```bash
+pip install git+https://github.com/Rynnnzen/ai-cognitive-core.git
+ai-cognitive-mcp
+```
+
+Or clone first, then install:
+
+```bash
+git clone https://github.com/Rynnnzen/ai-cognitive-core.git
+cd ai-cognitive-core
+pip install -e .
+```
+
+Then add the server to your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "ai-cognitive-core": {
+      "command": "ai-cognitive-mcp"
+    }
+  }
+}
+```
+
+Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`.
+
 ## Features
 
 - **17-layer cognitive architecture** — Heart (7 emotion layers), Conscious (5 awareness layers), and Memory (5 memory layers) running as one closed loop per turn.
@@ -18,6 +49,44 @@ This snapshot is **v0.4.1 (pre-release, branch `main`)** — on top of v0.4.0-te
 - **Contextual emoji palettes** — emoji variety that follows the mood and bubble style.
 - **Google Drive sync** — state (`heart_state.json`, `cognitive_memory.db`) syncs across devices via Drive API v3.
 - **5 MCP tools** — perceive, commit, sleep cycle, status, and persona configuration.
+
+## The 17-Layer Architecture
+
+![17-layer architecture diagram: Heart 7 layers, Conscious 5 layers, Memory 5 layers, connected to the MCP Server and Drive Sync](assets/arsitektur-17-layer.webp)
+
+Three systems running together on every conversation turn:
+
+### Heart — 7 emotion layers (`heart/`)
+
+The emotion engine that sets the mood, energy, and reply tone.
+
+- L1 Neurochemical — "body chemistry": energy, cortisol (stress), and oxytocin (bonding). Each decays over time (energy ~2h, stress ~1h, bonding ~3h).
+- L2 Primary Affect — primary affect circuits, e.g. CARE, which color each moment.
+- L3 Mood Space — PAD mood space (Pleasure–Arousal–Dominance) that determines the mood octant, e.g. Exuberant.
+- L4 Appraisal — stimulus appraisal: how novel, how goal-conducive, how copeable, and how norm-compatible.
+- L5 Defense — defense mechanisms when a stimulus feels threatening.
+- L6 Relational — relations and attachment, e.g. Secure, which regulates closeness with the user.
+- L7 Conscience — conscience: values and limits that can override other drives.
+
+### Conscious — 5 awareness layers (`conscious/`)
+
+Orchestrator of the closed cognitive cycle (Heart + Conscious + Memory).
+
+- L1 Preconscious — binds coalition candidates from memory and stimuli into candidate conscious content.
+- L2 Salience GWT — ignites the Global Workspace: picks which chunk "wins" and enters the conscious broadcast.
+- L3 Appraisal PSI — Dörner's PSI modulator: tunes thinking resolution depth and the selection threshold.
+- L4 Agency Volition — second-order volition compass, plus awareness of energy and bubble-chat style.
+- L5 Metacognition — monitors the thinking process and interrupts inertia when stuck.
+
+### Memory — 5 memory layers (`memory/`)
+
+Layered memory on SQLite, from fleeting impressions to settled knowledge.
+
+- L1 Sensory Buffer — very brief sensory impression buffer.
+- L2 Working Paging — working memory: chunks of information currently in active use.
+- L3 Episodic Graph — episodic memory graph: each conversation turn is stored as a node with its somatic tags.
+- L4 Semantic Schema — semantic facts: lessons abstracted from episodes during sleep.
+- L5 Procedural Habits — procedural habits formed from repeated patterns.
 
 ## What's new in v0.4.1
 
@@ -141,24 +210,6 @@ Agent: Oh, you just started playing guitar? What song are you practicing?
 - As with any update: back up `~/.ai_cognitive_state/` before installing. The migration is additive-only, so rolling back to v0.4.0 is just restoring the old code.
 - Note: if you upgrade in place over an older editable install, pip's installed metadata may still show the old version — the authoritative version is `__init__.__version__` (`0.4.1`).
 
-## Installation
-
-```bash
-git clone https://github.com/Rynnnzen/ai-cognitive-core.git
-cd ai-cognitive-core
-pip install -e .
-```
-
-Or directly from GitHub:
-
-```bash
-pip install git+https://github.com/Rynnnzen/ai-cognitive-core.git
-```
-
-Requires Python >= 3.10. Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`.
-
-Run the server with `ai-cognitive-mcp` (stdio).
-
 ## Usage
 
 ### The per-turn cycle
@@ -186,44 +237,6 @@ Supported environment variables:
 - `GDRIVE_TOKEN_PATH` — `token.json` path (default `~/.ai_cognitive_state/token.json`)
 - `GDRIVE_CLIENT_SECRET_PATH` — `client_secret.json` path
 - `COGNITIVE_DEVICE_ID` — device name, e.g. `hermes_pc` or `muse_cloud`
-
-## The 17-Layer Architecture
-
-![17-layer architecture diagram: Heart 7 layers, Conscious 5 layers, Memory 5 layers, connected to the MCP Server and Drive Sync](assets/arsitektur-17-layer.webp)
-
-Three systems running together on every conversation turn:
-
-### Heart — 7 emotion layers (`heart/`)
-
-The emotion engine that sets the mood, energy, and reply tone.
-
-- L1 Neurochemical — "body chemistry": energy, cortisol (stress), and oxytocin (bonding). Each decays over time (energy ~2h, stress ~1h, bonding ~3h).
-- L2 Primary Affect — primary affect circuits, e.g. CARE, which color each moment.
-- L3 Mood Space — PAD mood space (Pleasure–Arousal–Dominance) that determines the mood octant, e.g. Exuberant.
-- L4 Appraisal — stimulus appraisal: how novel, how goal-conducive, how copeable, and how norm-compatible.
-- L5 Defense — defense mechanisms when a stimulus feels threatening.
-- L6 Relational — relations and attachment, e.g. Secure, which regulates closeness with the user.
-- L7 Conscience — conscience: values and limits that can override other drives.
-
-### Conscious — 5 awareness layers (`conscious/`)
-
-Orchestrator of the closed cognitive cycle (Heart + Conscious + Memory).
-
-- L1 Preconscious — binds coalition candidates from memory and stimuli into candidate conscious content.
-- L2 Salience GWT — ignites the Global Workspace: picks which chunk "wins" and enters the conscious broadcast.
-- L3 Appraisal PSI — Dörner's PSI modulator: tunes thinking resolution depth and the selection threshold.
-- L4 Agency Volition — second-order volition compass, plus awareness of energy and bubble-chat style.
-- L5 Metacognition — monitors the thinking process and interrupts inertia when stuck.
-
-### Memory — 5 memory layers (`memory/`)
-
-Layered memory on SQLite, from fleeting impressions to settled knowledge.
-
-- L1 Sensory Buffer — very brief sensory impression buffer.
-- L2 Working Paging — working memory: chunks of information currently in active use.
-- L3 Episodic Graph — episodic memory graph: each conversation turn is stored as a node with its somatic tags.
-- L4 Semantic Schema — semantic facts: lessons abstracted from episodes during sleep.
-- L5 Procedural Habits — procedural habits formed from repeated patterns.
 
 ## Project structure
 
