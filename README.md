@@ -6,6 +6,8 @@ Snapshot ini adalah **v0.4.1 (pre-release, branch `v0.4.1`)** — di atas v0.4.0
 
 **Baru di v0.4.1:** Mimpi kini menyimpan cerita dulu baru ide (kolom `dream_story`), mimpi anti-skip (ambang 0.35, 40 kandidat), sistem adaptasi terinspirasi `amirhouieh/adapt` (memori prosedural berbobot atensi), ingatan foto lebih hidup (`feeling` + `when_label`), recall lebih nyambung (bobot keyword, bonus recency, penalti domain teknis), rasa penasaran lebih sering (cooldown 10 menit), palet emoji kontekstual, plus perbaikan reliabilitas: backup Drive tanpa false-positive dan backup DB efisien (commit hanya mendorong `heart_state.json`). Arsitektur 17 layer, 5 tool MCP, dan skema SQLite v0.4.0 tidak berubah — migrasi hanya menambah kolom. Detail lengkap di `CHANGELOG.md`.
 
+![Before / after installing v0.4.1](assets/before-after-v041.webp)
+
 ![Agent, maskot modul ini — digambar gaya crayon](assets/agent-crayon.webp)
 
 ## Arsitektur 17 Layer
@@ -69,7 +71,8 @@ ai-cognitive-core/
 │   └── test_v041.py
 ├── assets/                 — gambar README (gaya crayon)
 │   ├── arsitektur-17-layer.webp
-│   └── agent-crayon.webp
+│   ├── agent-crayon.webp
+│   └── before-after-v041.webp
 └── src/
     └── ai_cognitive_core/
         ├── __init__.py
