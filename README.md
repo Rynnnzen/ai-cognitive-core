@@ -2,7 +2,7 @@
 
 Hybrid cognitive architecture **Deterministic + LLM (17 Layers)** — Heart + Conscious + Memory — as an MCP server, with cross-device state synchronization via Google Drive API v3.
 
-This snapshot is **v0.5.0 (branch `main`)** — a full expansion release on top of v0.4.1. The changelog is in `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
+This snapshot is **v0.5.0 (branch `main`)** — a full expansion release on top of v0.4.1. For the per-version release notes, see [GitHub Releases](https://github.com/Rynnnzen/ai-cognitive-core/releases) and `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
 
 <img src="assets/agent-crayon.webp" alt="Agent, the module's mascot" width="240">
 
@@ -50,7 +50,7 @@ Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `goog
 - **Adaptation system** — attention-weighted procedural memory inspired by `amirhouieh/adapt`; the agent learns habits from interactions.
 - **Richer photo memory** — moments carry `feeling` and `when_label`, not just a caption.
 - **Relevant recall** — keyword/entity-overlap weighting, a recency bonus, and a technical-domain penalty in personal chat.
-- **Curiosity** — the agent asks follow-up questions more often (10-minute cooldown, 1 turn apart).
+- **Curiosity** — the agent asks follow-up questions more often (5-minute cooldown, 1 turn apart).
 - **Contextual emoji palettes** — emoji variety that follows the mood and bubble style.
 - **Google Drive sync** — state (`heart_state.json`, `cognitive_memory.db`) syncs across devices via Drive API v3.
 - **5 MCP tools** — perceive, commit, sleep cycle, status, and persona configuration.
@@ -99,55 +99,9 @@ Layered memory on SQLite, from fleeting impressions to settled knowledge.
 
 Supporting Memory: `v040_store.py` holds curiosity (5-minute cooldown, 1-turn gap, max 1 per perceive), reminders (`due_at` / `keyword:`, schedule-based), and rich photo moments (`caption`, `people`, `place`, `feeling`, `when_label`, `event_tags` — referenced only when `consent_status == "granted"`), plus the v0.5.0 additions: the **worker blackboard** (`worker_tasks` table), **inside jokes** (`inside_jokes` table, auto-detected via `match_inside_joke` → `inside_joke_cue`), and the **idle heartbeat** (`evaluate_idle_heartbeat`, quiet hours 23:00–06:59). `dreams.py` composes the dream narrative first (`dream_story`), then the idea — dreams are never promoted to `semantic_facts`. `consolidation.py` runs SWR replay, Ebbinghaus pruning, 40 dream candidates (min importance 0.35), and an expired-reminder sweep. `migration.py` is idempotent and additive (new tables: `curiosity_questions`, `reminder_intents`, `dream_records`, `photo_moments`, `turn_markers`, `energy_telemetry`, `working_memory_chunks`, `worker_tasks`, `inside_jokes`, `schema_meta`).
 
-## What's new in v0.5.0
+## Examples / Showcase
 
-Five expansions, keeping the 3-pillar architecture, the 5-tool MCP contract, and full compatibility with the v0.4.0 SQLite database. The migration is additive-only (3 new tables, no data rewritten).
-
-### 1. Persistent working memory
-
-`WorkingMemoryPager` stores up to 6 working-memory chunks in the new `working_memory_chunks` table, loaded at startup and saved on every incoming message. In one-shot MCP mode (a fresh server process per call), short-term context used to vanish between calls — now the thread of the conversation survives.
-
-### 2. Circadian rhythm
-
-L1 now knows the local time of day (default WIB / UTC+7, configurable via `CIRCADIAN_TZ_OFFSET_HOURS`). Four phases — `morning` (06–10), `daytime` (11–17), `evening` (18–22), `late_night` (23–04) — feed into energy and arousal: staying up late drains energy 1.30× faster and dips arousal, so the agent genuinely feels sleepy at 2 AM; mornings recharge 1.15× fresher. The current phase is exported as `circadian` on every perceive and in `get_status`.
-
-### 3. Idle heartbeat (real proactivity)
-
-`cognitive_get_status` now evaluates `proactive_heartbeat`: after 45+ minutes idle, the agent may initiate — a due reminder first, then a finished/failed worker task, then a new dream story or a curiosity question. Quiet hours (23:00–06:59) block all proactive initiation, so it never spams at night.
-
-### 4. Worker supervision board
-
-Delegations to worker bots are recorded in the `worker_tasks` table (`pending`, `running`, `done`, `failed`) via the optional `worker_task` parameter on `cognitive_commit_turn`. Active tasks appear in `worker_blackboard` on perceive and status, and a `done`/`failed` outcome nudges the heart (`apply_worker_outcome`) — the agent feels a little lift when a worker finishes, and a little dip when one fails.
-
-### 5. Relationship evolution & inside jokes
-
-The heart now tracks `trust_score` (0.0–1.0) and `relationship_stage` (`guarded` / `warm` / `close` / `deep_bond`), evolving slowly with interaction quality — visible in `get_status` under `relationship`. The `inside_jokes` table stores shared jokes (`add_inside_joke` on commit); when one matches the conversation, perceive surfaces an `inside_joke_cue`.
-
-### Also in this release
-
-- **Dynamic mood calibration** — no more automatic positive pull in `commit_turn` (default appraisal is now `None`); arousal can go negative on calm chat; L1/L2 feed into L3 PAD; the default baseline is `Relaxed` (`0.05, -0.05, 0.15`).
-- **Guardrail relaxation** — curiosity cooldown 5 minutes, anti-skip dreams (technical-word threshold 3, 40 candidates), `HABIT_TOP_K = 3`, `HABIT_MIN_SCORE = -1`, `RECALL_TECH_DOMAIN_PENALTY = 0.65`, `LUBB_STRICT_MODE = False`.
-- All v0.4.1 improvements are included (story-first dreams, adaptation system, richer photo memory, on-topic recall, emoji palettes, Drive-backup fixes).
-
-### Pros after installing
-
-- Conversations keep their thread across one-shot MCP calls.
-- The agent's energy honestly follows the time of day.
-- The agent can reach out on its own after a quiet stretch — reminders, worker results, dreams — without spamming at night.
-- Supervised workers: their status and outcomes are visible to the agent, not just the supervisor.
-- The relationship visibly deepens over time, and shared jokes resurface naturally.
-
-### Cons / things to watch
-
-- Late-night drain is 1.30× — long night sessions will tire the agent faster (that is the point, but plan around it).
-- The heartbeat only *evaluates* — the supervisor still decides whether to send anything. `should_initiate` is a signal, not a message.
-- `trust_score` and `relationship_stage` start at their defaults (`0.55`, `warm`) on existing installs — they evolve from there, they are not backfilled from history.
-- As with any update: back up `~/.ai_cognitive_state/` before installing. The migration is additive-only, so rolling back to v0.4.1 is just restoring the old code.
-- Note: if you upgrade in place over an older editable install, pip's installed metadata may still show the old version — the authoritative version is `__init__.__version__` (`0.5.0`).
-
-## What's new in v0.4.1
-
-Each feature below comes with an illustration and an example chat with the user, before and after installing v0.4.1.
+Each feature below comes with an illustration and an example chat showing the difference it makes.
 
 ### 1. Dreams: story first, then idea
 
@@ -207,7 +161,7 @@ Agent: That's your cat on the sofa, Sunday afternoon — such a relaxed mood.
 
 <img src="assets/recall.webp" alt="The agent picking the right memory — the grocery list" width="400">
 
-Keyword/entity-overlap weighting + a soft recency bonus + a 0.45× penalty on technical-domain episodes during personal chat. The `next_node_id` chain is also restored from SQLite at init, so it doesn't break across one-shot MCP processes.
+Keyword/entity-overlap weighting + a soft recency bonus + a 0.65× penalty on technical-domain episodes during personal chat. The `next_node_id` chain is also restored from SQLite at init, so it doesn't break across one-shot MCP processes.
 
 **Example chat**
 
@@ -225,7 +179,7 @@ Agent: Yesterday you said you wanted to buy milk, bread, and eggs — did you ge
 
 <img src="assets/curiosity.webp" alt="The agent asking a follow-up question" width="400">
 
-Cooldown 30 → 10 minutes, minimum turns between questions 3 → 1 — the agent asks follow-up questions more often.
+5-minute cooldown, 1 turn apart — the agent asks follow-up questions more often.
 
 **Example chat**
 
@@ -238,34 +192,6 @@ After:
 User: I just started playing guitar.
 Agent: Oh, you just started playing guitar? What song are you practicing?
 ```
-
-### Also in this release
-
-- **Contextual emoji palettes** — deterministic emoji rotation based on `total_turns` per mood octant and bubble style (still empty for `dry_short_1_bubble`), exposed via `emoji_palette` and `EmojiHint`.
-- **Reliability fixes** — `push_state()` no longer reports success when a Drive upload fails (returns `False`, writes to `stderr`, honors `ENABLE_DRIVE_SYNC`); each commit pushes only `heart_state.json` (fast), the full DB backs up at sleep cycle or when energy ≤ 0.10; `cognitive_configure_persona` runs synchronously in one-shot MCP; `total_turns` no longer double-counts on `perceive_retry`.
-- The 17-layer architecture, 5 MCP tools, and the v0.4.0 SQLite schema are unchanged — the migration only adds columns.
-
-### Pros after installing
-
-- Dreams get recorded again — with stories you can read back.
-- Recall stays on the conversation's topic.
-- Photo memories carry their context (who/when/feeling).
-- The agent asks follow-up questions more often, so conversations feel more alive.
-- Repeated preferences become habits — no need to repeat the same correction.
-- Faster commits (only `heart_state.json` per turn).
-- No more false "backup OK" reports.
-- Emoji variety follows the mood.
-
-### Cons / things to watch
-
-- Dream stories are short canned templates per category, not free-form generation — they can feel repetitive.
-- Lower dream thresholds mean more dreams, including from less important episodes — expect some noise.
-- Curiosity questions are much more frequent (10-minute cooldown, 1 turn) — if that feels like too much, raise `CURIOSITY_COOLDOWN_MINUTES` / `CURIOSITY_MIN_TURNS_BETWEEN` in `config.py`.
-- Habits only help once they exist — a fresh install has no habits until preferences repeat.
-- Emoji palettes rotate deterministically by turn count, so the sequence repeats.
-- The Drive copy of `cognitive_memory.db` now lags behind local state during the day (it syncs at sleep cycle or at critical energy). `heart_state.json` still syncs every commit.
-- As with any update: back up `~/.ai_cognitive_state/` before installing. The migration is additive-only, so rolling back to v0.4.0 is just restoring the old code.
-- Note: if you upgrade in place over an older editable install, pip's installed metadata may still show the old version — the authoritative version is `__init__.__version__` (`0.4.1`).
 
 ## Usage
 
@@ -294,6 +220,12 @@ Supported environment variables:
 - `GDRIVE_TOKEN_PATH` — `token.json` path (default `~/.ai_cognitive_state/token.json`)
 - `GDRIVE_CLIENT_SECRET_PATH` — `client_secret.json` path
 - `COGNITIVE_DEVICE_ID` — device name, e.g. `hermes_pc` or `muse_cloud`
+
+### Running tests
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 ## Project structure
 
