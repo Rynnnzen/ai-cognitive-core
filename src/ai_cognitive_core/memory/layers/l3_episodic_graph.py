@@ -83,8 +83,9 @@ def run_bounded_ppr(
                next_node_id, embedding_blob
         FROM episodic_nodes
         ORDER BY timestamp_utc DESC
-        LIMIT 250
-        """
+        LIMIT ?
+        """,
+        (int(getattr(config, "EPISODE_SCAN_LIMIT", 250)),),
     )
     rows = cur.fetchall()
     if not rows:
@@ -95,31 +96,44 @@ def run_bounded_ppr(
     query_is_tech = bool(q_tokens & _TECH_DOMAIN_WORDS)
     tech_penalty = float(getattr(config, "RECALL_TECH_DOMAIN_PENALTY", 0.65))
 
+    # v0.5.1 (M10): parsing per baris dilindungi — satu baris korup
+    # (pad_json rusak / embedding_blob salah panjang) dilewati, bukan
+    # menggagalkan seluruh recall.
     nodes: List[EpisodicNode] = []
     vecs: List[np.ndarray] = []
-    sims = np.zeros(len(rows), dtype=np.float32)
-    overlaps = np.zeros(len(rows), dtype=np.float32)
-    domain_mult = np.ones(len(rows), dtype=np.float32)
+    for r in rows:
+        try:
+            pad_enc = PADVector(**json.loads(r[4]))
+            node = EpisodicNode(
+                node_id=r[0],
+                timestamp_utc=r[1],
+                summary=r[2],
+                entities=json.loads(r[3]),
+                somatic_tag=SomaticTag(pad_at_encoding=pad_enc, arousal_weight=r[5]),
+                stability_status=r[6],
+                importance_score=r[7],
+                access_count=r[8],
+                next_node_id=r[9],
+            )
+            v = np.frombuffer(r[10], dtype=np.float32) if r[10] else deterministic_embed(node.summary)
+            if v.shape[0] != EMBED_DIM:
+                raise ValueError("embedding_blob wrong length")
+        except Exception:
+            continue
+        nodes.append(node)
+        vecs.append(v)
+    if not nodes:
+        return [], 1.0
+
+    n = len(nodes)
+    sims = np.zeros(n, dtype=np.float32)
+    overlaps = np.zeros(n, dtype=np.float32)
+    domain_mult = np.ones(n, dtype=np.float32)
 
     id_to_idx = {}
-    for i, r in enumerate(rows):
-        pad_enc = PADVector(**json.loads(r[4]))
-        node = EpisodicNode(
-            node_id=r[0],
-            timestamp_utc=r[1],
-            summary=r[2],
-            entities=json.loads(r[3]),
-            somatic_tag=SomaticTag(pad_at_encoding=pad_enc, arousal_weight=r[5]),
-            stability_status=r[6],
-            importance_score=r[7],
-            access_count=r[8],
-            next_node_id=r[9],
-        )
-        nodes.append(node)
+    for i, node in enumerate(nodes):
         id_to_idx[node.node_id] = i
-        v = np.frombuffer(r[10], dtype=np.float32) if r[10] else deterministic_embed(node.summary)
-        vecs.append(v)
-        sims[i] = max(0.0, cosine_sim(q_vec, v))
+        sims[i] = max(0.0, cosine_sim(q_vec, vecs[i]))
 
         ep_tokens = _content_tokens(node.summary) | {e.lower() for e in node.entities}
         if q_tokens and ep_tokens:
@@ -128,7 +142,6 @@ def run_bounded_ppr(
         if not query_is_tech and ep_tech_hits >= 2 and overlaps[i] < 0.25:
             domain_mult[i] = tech_penalty
 
-    n = len(nodes)
     adj = np.zeros((n, n), dtype=np.float32)
     for i, nd in enumerate(nodes):
         if nd.next_node_id and nd.next_node_id in id_to_idx:
@@ -145,7 +158,9 @@ def run_bounded_ppr(
     row_sums = adj.sum(axis=1, keepdims=True)
     trans = np.divide(adj, row_sums, out=np.zeros_like(adj), where=row_sums > 1e-8)
 
-    p0 = (0.65 * sims + 0.35 * overlaps) * domain_mult
+    # v0.5.1 (M3): domain_mult diterapkan SEKALI saja (di skor akhir di
+    # bawah), bukan di p0 dan skor akhir sekaligus (dulu efektif 0.65^2).
+    p0 = 0.65 * sims + 0.35 * overlaps
     if p0.sum() > 1e-8:
         p0 /= p0.sum()
     else:

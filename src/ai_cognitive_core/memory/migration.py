@@ -1,10 +1,14 @@
 """
-Migrasi skema SQLite v0.3.1 -> v0.4.0 (idempotent, aman dijalankan berulang).
+Migrasi skema SQLite v0.3.1 -> v0.5.1 (idempotent, aman dijalankan berulang).
 
-- Membuat 4 tabel baru (curiosity_questions, reminder_intents, dream_records,
-  photo_moments) + turn_markers + energy_telemetry + schema_meta.
-- Menambah kolom provenans (source, inference_status) ke semantic_facts
-  secara additive (ALTER TABLE dijaga PRAGMA table_info).
+- Membuat tabel baru v0.4.0 (curiosity_questions, reminder_intents,
+  dream_records, photo_moments) + turn_markers + energy_telemetry +
+  schema_meta, dan tabel v0.5.0 (working_memory_chunks, worker_tasks,
+  inside_jokes).
+- Menambah kolom provenans (source, inference_status) ke semantic_facts,
+  dream_story ke dream_records, feeling/when_label ke photo_moments, dan
+  alerted_utc ke worker_tasks — semuanya additive (ALTER TABLE dijaga
+  PRAGMA table_info).
 - SEBELUM menulis apa pun, menyalin DB ke <db>.bak-v0.3.1 jika backup itu
   belum ada — jadi DB v0.3.1 asli selalu bisa dipulihkan.
 
@@ -115,7 +119,8 @@ _NEW_TABLES: Dict[str, str] = {
             status TEXT NOT NULL,
             result_summary TEXT DEFAULT '',
             created_utc TEXT NOT NULL,
-            updated_utc TEXT NOT NULL
+            updated_utc TEXT NOT NULL,
+            alerted_utc TEXT DEFAULT ''
         )
     """,
     "inside_jokes": """
@@ -143,6 +148,8 @@ _ADDITIVE_COLUMNS: List[tuple] = [
     ("dream_records", "dream_story", "TEXT DEFAULT ''"),
     ("photo_moments", "feeling", "TEXT DEFAULT ''"),
     ("photo_moments", "when_label", "TEXT DEFAULT ''"),
+    # v0.5.1 (M11): penanda alert heartbeat sudah dilaporkan.
+    ("worker_tasks", "alerted_utc", "TEXT DEFAULT ''"),
 ]
 
 
@@ -155,7 +162,7 @@ def _table_columns(conn: sqlite3.Connection, table: str) -> set:
 
 
 def migrate_db(db_path, backup: bool = True) -> dict:
-    """Jalankan migrasi v0.4.0 pada DB di db_path. Idempotent."""
+    """Jalankan migrasi pada DB di db_path. Idempotent."""
     path = Path(db_path)
     stats = {
         "schema_version": SCHEMA_VERSION,

@@ -69,6 +69,9 @@ class DriveSyncBridge:
         self._ws_md_folder_id: Optional[str] = None
         self._file_id_cache: Dict[str, str] = {}
         self._lock = threading.Lock()
+        # v0.5.1 (P1): pesan error terakhir dari _init_drive_service
+        # (None = init sukses). Tidak pernah berisi isi token/secret.
+        self.last_init_error: Optional[str] = None
 
         self._ensure_ca_bundle()
         self.service = self._init_drive_service()
@@ -86,8 +89,14 @@ class DriveSyncBridge:
 
     def _init_drive_service(self):
         if not HAS_GDRIVE_LIB:
+            self.last_init_error = "google api client not installed"
             return None
 
+        # v0.5.1 (P1): jangan telan error refresh/init diam-diam — catat ke
+        # stderr dan simpan di last_init_error agar get_status bisa
+        # menampilkannya. Pesan exception library tidak pernah berisi isi
+        # token/secret; tetap dipotong ke 300 karakter untuk keamanan.
+        error = None
         raw_oauth_token = os.environ.get("GDRIVE_OAUTH_TOKEN_JSON")
         try:
             creds = None
@@ -102,9 +111,13 @@ class DriveSyncBridge:
                     creds.refresh(Request())
                     self.token_path.write_text(creds.to_json(), encoding="utf-8")
                 if creds.valid:
+                    self.last_init_error = None
                     return build("drive", "v3", credentials=creds, cache_discovery=False)
-        except Exception:
-            pass
+                error = "oauth credentials invalid"
+                sys.stderr.write(f"[DriveSyncBridge] {error}\n")
+        except Exception as exc:
+            error = f"oauth init failed: {exc}"[:300]
+            sys.stderr.write(f"[DriveSyncBridge] {error}\n")
 
         raw_sa_json = os.environ.get("GDRIVE_SERVICE_ACCOUNT_JSON")
         sa_path = os.environ.get("GDRIVE_CREDENTIALS_PATH", str(self.local_dir / "service_account.json"))
@@ -112,12 +125,16 @@ class DriveSyncBridge:
             if raw_sa_json:
                 info = json.loads(raw_sa_json)
                 creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
+                self.last_init_error = None
                 return build("drive", "v3", credentials=creds, cache_discovery=False)
             elif os.path.exists(sa_path):
                 creds = service_account.Credentials.from_service_account_file(sa_path, scopes=SCOPES)
+                self.last_init_error = None
                 return build("drive", "v3", credentials=creds, cache_discovery=False)
-        except Exception:
-            pass
+        except Exception as exc:
+            error = f"service account init failed: {exc}"[:300]
+            sys.stderr.write(f"[DriveSyncBridge] {error}\n")
+        self.last_init_error = error or "no credentials configured"
         return None
 
     @staticmethod
@@ -285,12 +302,12 @@ class DriveSyncBridge:
 
         return False, local_delta
 
-    def push_state(self, include_memory_db: bool = True, async_mode: bool = False) -> bool:
-        from ai_cognitive_core import config
+    def _write_sync_meta(self) -> None:
+        """Tulis sync_meta.json dengan last_sync_utc SEKARANG.
 
-        if include_memory_db and self.db_path.exists():
-            self._checkpoint_sqlite()
-
+        v0.5.1 (P2): hanya dipanggil SETELAH upload berhasil, agar stempel
+        berarti "terakhir berhasil sync", bukan "terakhir mencoba".
+        """
         now_iso = datetime.now(timezone.utc).isoformat()
         meta_payload = {
             "last_sync_utc": now_iso,
@@ -302,9 +319,26 @@ class DriveSyncBridge:
             },
         }
         self.meta_path.write_text(json.dumps(meta_payload, indent=2), encoding="utf-8")
-        self._last_pull_check_mono = time.monotonic()
+
+    def _record_push_attempt(self) -> None:
+        """Catat last_attempt_utc tanpa mengubah last_sync_utc (v0.5.1 P2).
+
+        Dipanggil saat push tidak bisa berjalan (offline / sync dimatikan),
+        agar kegagalan tetap terlacak tanpa memalsukan stempel sync.
+        """
+        meta = self._read_local_meta() or {}
+        meta["last_attempt_utc"] = datetime.now(timezone.utc).isoformat()
+        self.meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    def push_state(self, include_memory_db: bool = True, async_mode: bool = False) -> bool:
+        from ai_cognitive_core import config
+
+        if include_memory_db and self.db_path.exists():
+            self._checkpoint_sqlite()
 
         if not getattr(config, "ENABLE_DRIVE_SYNC", True) or not self.service:
+            # v0.5.1 (P2): offline — jangan sentuh last_sync_utc.
+            self._record_push_attempt()
             return False
 
         def _do_upload() -> bool:
@@ -316,7 +350,11 @@ class DriveSyncBridge:
                     self._upload_file(self.heart_path, folder_id, mime_type="application/json")
                     if include_memory_db and self.db_path.exists():
                         self._upload_file(self.db_path, folder_id, mime_type="application/x-sqlite3")
+                    # v0.5.1 (P2): stempel sync hanya ditulis setelah upload
+                    # heart + DB sukses, lalu meta-nya sendiri di-upload.
+                    self._write_sync_meta()
                     self._upload_file(self.meta_path, folder_id, mime_type="application/json")
+                    self._last_pull_check_mono = time.monotonic()
                 return True
             except Exception as exc:
                 sys.stderr.write(f"[DriveSyncBridge] Push gagal: {exc}\n")

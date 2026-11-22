@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from ai_cognitive_core.schemas import (
@@ -42,8 +45,29 @@ class HeartEngine:
             try:
                 raw = json.loads(self.state_path.read_text(encoding="utf-8"))
                 return HeartState.from_dict(raw)
-            except Exception:
-                pass
+            except Exception as exc:
+                # v0.5.1 (P3): JANGAN reset diam-diam. Log error, amankan
+                # file rusak (jangan ditimpa), lalu coba pulihkan dari .bak.
+                sys.stderr.write(f"[HeartEngine] heart_state.json rusak: {exc}\n")
+                stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+                corrupt_path = self.state_path.with_name(
+                    f"{self.state_path.name}.corrupt.{stamp}"
+                )
+                try:
+                    self.state_path.rename(corrupt_path)
+                    sys.stderr.write(f"[HeartEngine] file rusak dipindah ke: {corrupt_path.name}\n")
+                except OSError as rename_exc:
+                    sys.stderr.write(f"[HeartEngine] gagal memindah file rusak: {rename_exc}\n")
+                bak_path = self.state_path.with_name(f"{self.state_path.name}.bak")
+                if bak_path.exists():
+                    try:
+                        raw_bak = json.loads(bak_path.read_text(encoding="utf-8"))
+                        recovered = HeartState.from_dict(raw_bak)
+                        sys.stderr.write("[HeartEngine] state dipulihkan dari .bak\n")
+                        self.save(recovered)
+                        return recovered
+                    except Exception as bak_exc:
+                        sys.stderr.write(f"[HeartEngine] .bak juga rusak: {bak_exc}\n")
         state = HeartState()
         self.save(state)
         return state
@@ -52,7 +76,21 @@ class HeartEngine:
         if state is not None:
             self.state = state
         self.state.last_updated_utc = utc_now_iso()
-        self.state_path.write_text(self.state.model_dump_json(indent=2), encoding="utf-8")
+        payload = self.state.model_dump_json(indent=2)
+        # v0.5.1 (P3): sebelum menimpa file yang sudah ada dan valid, simpan
+        # salinan last-good (.bak). Lalu tulis atomik: tmp + os.replace.
+        if self.state_path.exists():
+            try:
+                json.loads(self.state_path.read_text(encoding="utf-8"))
+                shutil.copy2(
+                    str(self.state_path),
+                    str(self.state_path.with_name(f"{self.state_path.name}.bak")),
+                )
+            except Exception:
+                pass  # File lama rusak/tidak terbaca — jangan jadikan .bak.
+        tmp_path = self.state_path.with_name(f"{self.state_path.name}.tmp")
+        tmp_path.write_text(payload, encoding="utf-8")
+        os.replace(str(tmp_path), str(self.state_path))
 
     def compute_local_elapsed_seconds(self) -> float:
         try:
@@ -178,20 +216,22 @@ class HeartEngine:
         self.state.active_defense = select_defense_mechanism(self.state)
 
         # v0.5.0: Evolusi Relasi (trust_score & relationship_stage)
+        # v0.5.1 (M5): delta & ambang stage dari config.py agar benar-benar
+        # bertahap (dulu hardcoded +0.012/-0.020 di sini).
         if getattr(config, "ENABLE_RELATIONSHIP_EVOLUTION", True):
             trust_delta = 0.0
             if appraisal.goal_conduciveness > 0.15 and appraisal.norm_compatibility >= 0.0:
-                trust_delta = 0.012
+                trust_delta = float(getattr(config, "TRUST_POS_DELTA", 0.004))
             elif appraisal.goal_conduciveness < -0.25 or appraisal.norm_compatibility < -0.25:
-                trust_delta = -0.020
+                trust_delta = float(getattr(config, "TRUST_NEG_DELTA", -0.012))
             if trust_delta != 0.0:
                 self.state.trust_score = round(max(0.0, min(1.0, self.state.trust_score + trust_delta)), 4)
             t = self.state.trust_score
-            if t >= 0.80:
+            if t >= float(getattr(config, "TRUST_STAGE_DEEP_BOND", 0.80)):
                 self.state.relationship_stage = "deep_bond"
-            elif t >= 0.60:
+            elif t >= float(getattr(config, "TRUST_STAGE_CLOSE", 0.60)):
                 self.state.relationship_stage = "close"
-            elif t >= 0.40:
+            elif t >= float(getattr(config, "TRUST_STAGE_WARM", 0.40)):
                 self.state.relationship_stage = "warm"
             else:
                 self.state.relationship_stage = "guarded"

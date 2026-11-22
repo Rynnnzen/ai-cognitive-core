@@ -1,13 +1,14 @@
 """
-Parameter v0.4.0 dalam SATU tempat (mudah di-tune selama fase tes).
+Parameter v0.5.1 dalam SATU tempat (mudah di-tune).
 
-Semua nilai di sini adalah nilai FASE TES — lihat PATCH_NOTES.md bagian v0.4.0
-untuk alasan setiap angka. Nilai lama v0.3.1 dicantumkan di komentar sebagai
-pembanding. Jangan mengubah nilai enum bubble_style di sini; nilainya dikunci
-kontrak eksternal dan didefinisikan di heart/engine.py.
+Semua nilai di sini adalah nilai live yang sudah disetel selama pemakaian
+nyata — lihat CHANGELOG.md untuk alasan setiap angka. Nilai lama v0.3.1 /
+v0.4.0 dicantumkan di komentar sebagai pembanding. Jangan mengubah nilai
+enum bubble_style di sini; nilainya dikunci kontrak eksternal dan
+didefinisikan di heart/engine.py.
 
-Fitur baru v0.4.0 dapat dimatikan satu per satu lewat flag ENABLE_* di bawah
-(default True pada fase tes agar semuanya teruji).
+Fitur baru dapat dimatikan satu per satu lewat flag ENABLE_* di bawah
+(default True).
 """
 
 # ---------------------------------------------------------------------------
@@ -131,8 +132,9 @@ ENABLE_CIRCADIAN_RHYTHM = True
 CIRCADIAN_TZ_OFFSET_HOURS = 7       # Default WIB (UTC+7)
 CIRCADIAN_LATE_NIGHT_START = 23     # 23:00 - 04:59: fase begadang (drain lebih cepat)
 CIRCADIAN_LATE_NIGHT_END = 5
-CIRCADIAN_MORNING_START = 6         # 06:00 - 10:59: fase pagi segar
+CIRCADIAN_MORNING_START = 5         # v0.5.1 (M6): 05:00 - 10:59 = morning (sebelumnya 06:00, jam 05:00 jatuh ke evening)
 CIRCADIAN_MORNING_END = 11
+CIRCADIAN_DAYTIME_END = 18          # v0.5.1 (M6): 11:00 - 17:59 = daytime; 18:00 - 22:59 = evening
 CIRCADIAN_LATE_NIGHT_DRAIN_MULT = 1.30
 CIRCADIAN_MORNING_RECHARGE_BONUS = 1.15
 
@@ -146,3 +148,19 @@ MAX_ACTIVE_WORKER_TASKS = 30
 
 ENABLE_RELATIONSHIP_EVOLUTION = True
 MAX_INSIDE_JOKES = 50
+
+# ---------------------------------------------------------------------------
+# Parameter v0.5.1 — Kalibrasi evolusi relasi (temuan audit M5)
+# Trust naik/turun per giliran positif/negatif; ambang stage menentukan
+# relationship_stage. v0.5.0 memakai +0.012/-0.020 hardcoded di engine —
+# terlalu cepat untuk klaim "evolves slowly" (deep_bond dalam ~21 giliran).
+# ---------------------------------------------------------------------------
+TRUST_POS_DELTA = 0.004
+TRUST_NEG_DELTA = -0.012
+TRUST_STAGE_DEEP_BOND = 0.80
+TRUST_STAGE_CLOSE = 0.60
+TRUST_STAGE_WARM = 0.40
+
+# Batas inersia emosi untuk pemulihan bertahap (temuan audit M13).
+INERTIA_BASELINE_PI1 = 0.35
+INERTIA_RECOVERY_STEP = 0.02

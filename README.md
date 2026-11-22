@@ -65,7 +65,7 @@ Three systems running together on every conversation turn:
 
 The emotion engine that sets the mood, energy, and reply tone.
 
-- L1 Neurochemical — "body chemistry": 6 variables (`energy`, `cortisol`, `oxytocin`, `dopamine`, `serotonin`, `noradrenaline`) decaying and recovering on real time. Resting refills energy exponentially (τ = 40 min toward 0.92, after a +0.08 micro-nap); idle refills slower (τ = 2h toward 0.85). **Circadian rhythm (v0.5.0):** a local clock (default WIB / UTC+7) with 4 phases — `morning` (06–10), `daytime` (11–17), `evening` (18–22), `late_night` (23–04). Late night raises energy drain 1.30× and lowers arousal (−0.08); morning gives a 1.15× sleep-recovery bonus.
+- L1 Neurochemical — "body chemistry": 6 variables (`energy`, `cortisol`, `oxytocin`, `dopamine`, `serotonin`, `noradrenaline`) decaying and recovering on real time. Resting refills energy exponentially (τ = 40 min toward 0.92, after a +0.08 micro-nap); idle refills slower (τ = 2h toward 0.85). **Circadian rhythm (v0.5.0):** a local clock (default WIB / UTC+7) with 4 phases — `morning` (05–10), `daytime` (11–17), `evening` (18–22), `late_night` (23–04). Late night raises energy drain 1.30× and lowers arousal (−0.08); morning gives a 1.15× sleep-recovery bonus.
 - L2 Primary Affect — 7 Panksepp circuits (`SEEKING`, `CARE`, `PLAY`, `LUST`, `FEAR`, `RAGE`, `PANIC_GRIEF`) with mixed-emotion co-activation detection.
 - L3 Mood Space — PAD Pull-Push Engine (`P`, `A`, `D`) mapping 8 mood octants (`Exuberant`, `Dependent`, `Relaxed`, `Docile`, `Hostile`, `Anxious`, `Disdainful`, `Bored/Depressed`) plus emotional inertia. Default baseline is `Relaxed` (`P=0.05, A=-0.05, D=0.15`). Low energy (`< 0.45`) pulls arousal down; negative L2 circuits pull pleasure and dominance down.
 - L4 Appraisal — fast heuristic SEC extraction (<2ms), sensitive to texting micro-cues (`dry_short`, `cold_passive_aggressive`, `shouting_caps`, `expressive_affectionate`) and reply latency (≤45s vs ≥6h). Arousal can go negative on calm/neutral chat (−0.10), passive-aggressive text (−0.12), and `dry_short` (−0.18).
@@ -203,7 +203,7 @@ Agent: Oh, you just started playing guitar? What song are you practicing?
 4. `cognitive_get_status` — check energy, mood, and memory status anytime, including the `v040` and `v050` blocks (`circadian`, `relationship`, `working_memory_chunks`, `worker_blackboard`, `proactive_heartbeat`).
 5. `cognitive_configure_persona` — configure the persona (careful: default values overwrite existing attachment — always pass the current `attachment_style` and `inertia_pi1` when you only mean to change the baseline).
 
-Energy refills automatically during rest (toward 0.92 while resting) and drains while working. Below ~0.32, the reply style automatically becomes a single short sleepy bubble. The circadian rhythm modulates this: late-night (23:00–04:59) drain is 1.30×, morning (06:00–10:59) recovery gets a 1.15× bonus.
+Energy refills automatically during rest (toward 0.92 while resting) and drains while working. Below ~0.32, the reply style automatically becomes a single short sleepy bubble. The circadian rhythm modulates this: late-night (23:00–04:59) drain is 1.30×, morning (05:00–10:59) recovery gets a 1.15× bonus.
 
 ### Google Drive sync
 

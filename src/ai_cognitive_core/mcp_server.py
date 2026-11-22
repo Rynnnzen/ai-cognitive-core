@@ -1,7 +1,8 @@
 import json
 import sys
+from datetime import datetime, timezone
 from typing import Optional
-from ai_cognitive_core import config
+from ai_cognitive_core import __version__, config
 from ai_cognitive_core.drive_bridge import DriveSyncBridge
 from ai_cognitive_core.heart.engine import HeartEngine
 from ai_cognitive_core.heart.layers.l1_neurochemical import current_local_hour, get_circadian_phase
@@ -33,6 +34,7 @@ except ImportError:
                 line = line.strip()
                 if not line:
                     continue
+                req_id = None
                 try:
                     req = json.loads(line)
                     method = req.get("method")
@@ -44,7 +46,7 @@ except ImportError:
                             "result": {
                                 "protocolVersion": "2024-11-05",
                                 "capabilities": {"tools": {}},
-                                "serverInfo": {"name": self.name, "version": "0.5.0"},
+                                "serverInfo": {"name": self.name, "version": __version__},
                             },
                         }
                         sys.stdout.write(json.dumps(resp) + "\n")
@@ -78,6 +80,18 @@ except ImportError:
                         sys.stdout.flush()
                 except Exception as exc:
                     sys.stderr.write(f"[MCP Fallback Error] {exc}\n")
+                    # v0.5.1 (M16): kirim respons JSON-RPC error agar klien
+                    # tidak menggantung menunggu balasan yang tak kunjung tiba.
+                    try:
+                        err_resp = {
+                            "jsonrpc": "2.0",
+                            "id": req_id,
+                            "error": {"code": -32603, "message": str(exc)},
+                        }
+                        sys.stdout.write(json.dumps(err_resp) + "\n")
+                        sys.stdout.flush()
+                    except Exception:
+                        pass
 
     mcp = _FallbackMCP("ai_cognitive_core")
 
@@ -346,8 +360,29 @@ def cognitive_get_status() -> str:
         },
     }
     local_hour = current_local_hour()
+    # v0.5.1 (P1): status Drive terlihat di get_status — connected,
+    # stempel sync terakhir, error init terakhir, + peringatan bila
+    # offline atau sync terakhir sudah > 6 jam.
+    drive_meta = bridge._read_local_meta() or {}
+    last_sync = drive_meta.get("last_sync_utc")
+    drive_status = {
+        "connected": bool(bridge.service),
+        "last_sync_utc": last_sync,
+        "last_init_error": getattr(bridge, "last_init_error", None),
+    }
+    last_sync_dt = DriveSyncBridge._parse_iso(last_sync) if last_sync else None
+    if last_sync_dt is not None and last_sync_dt.tzinfo is None:
+        last_sync_dt = last_sync_dt.replace(tzinfo=timezone.utc)
+    stale = last_sync_dt is None or (
+        datetime.now(timezone.utc) - last_sync_dt
+    ).total_seconds() > 6 * 3600
+    if not bridge.service:
+        drive_status["warning"] = "drive offline — backups not running"
+    elif stale:
+        drive_status["warning"] = "last successful sync over 6h ago"
     snapshot["v050"] = {
-        "core_version": "0.5.0",
+        "core_version": __version__,
+        "drive_status": drive_status,
         "circadian": {"local_hour": local_hour, "phase": get_circadian_phase(local_hour)},
         "relationship": {
             "trust_score": heart.state.trust_score,
@@ -367,17 +402,40 @@ def cognitive_get_status() -> str:
 
 @mcp.tool()
 def cognitive_configure_persona(
-    attachment_style: str = "Avoidant",
-    baseline_p: float = 0.05,
-    baseline_a: float = -0.05,
-    baseline_d: float = 0.15,
-    inertia_pi1: float = 0.45,
+    attachment_style: Optional[str] = None,
+    baseline_p: Optional[float] = None,
+    baseline_a: Optional[float] = None,
+    baseline_d: Optional[float] = None,
+    inertia_pi1: Optional[float] = None,
 ) -> str:
-    """Sesuaikan cetak biru kepribadian dasar (Attachment Style, PAD_0, dan inersia pi_1)."""
+    """Sesuaikan cetak biru kepribadian dasar (Attachment Style, PAD_0, dan inersia pi_1).
+
+    v0.5.1 (P5): semua parameter default None = pertahankan nilai yang ada.
+    Hanya field yang secara eksplisit diberikan yang diubah, jadi panggilan
+    tanpa argumen tidak lagi menimpa kalibrasi (dulu default Avoidant/0.45).
+    """
     from ai_cognitive_core.schemas import AttachmentStyle, PADVector
-    heart.state.attachment_style = AttachmentStyle(attachment_style)
-    heart.state.pad_baseline = PADVector(P=baseline_p, A=baseline_a, D=baseline_d).clamp()
-    heart.state.emotional_inertia_pi1 = max(0.05, min(0.90, float(inertia_pi1)))
+    if attachment_style is not None:
+        try:
+            heart.state.attachment_style = AttachmentStyle(attachment_style)
+        except ValueError:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"invalid attachment_style: {attachment_style!r}",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+    if baseline_p is not None or baseline_a is not None or baseline_d is not None:
+        cur = heart.state.pad_baseline
+        heart.state.pad_baseline = PADVector(
+            P=baseline_p if baseline_p is not None else cur.P,
+            A=baseline_a if baseline_a is not None else cur.A,
+            D=baseline_d if baseline_d is not None else cur.D,
+        ).clamp()
+    if inertia_pi1 is not None:
+        heart.state.emotional_inertia_pi1 = max(0.05, min(0.90, float(inertia_pi1)))
     heart.save()
     synced = bridge.push_state(include_memory_db=False, async_mode=False)
     return json.dumps(

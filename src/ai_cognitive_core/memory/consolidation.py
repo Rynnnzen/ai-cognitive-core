@@ -53,6 +53,17 @@ def run_sleep_consolidation(db_path: str) -> dict:
     cur.execute("DELETE FROM episodic_nodes WHERE importance_score < 0.12 AND access_count <= 1")
     pruned = cur.rowcount
 
+    # v0.5.1 (M1): batasi energy_telemetry ke 2000 baris terbaru agar tidak
+    # tumbuh tanpa batas (sebelumnya tidak ada pruning sama sekali).
+    cur.execute(
+        """
+        DELETE FROM energy_telemetry WHERE id NOT IN (
+            SELECT id FROM energy_telemetry ORDER BY id DESC LIMIT 2000
+        )
+        """
+    )
+    telemetry_pruned = cur.rowcount
+
     # v0.4.0: rangkai mimpi dari kumpulan kandidat yang LEBIH LUAS dari 5 episode
     # replay (yang isinya didominasi episode setup teknis berkepentingan 1.0).
     # Kandidat mimpi: 20 episode teratas dengan importance >= ambang mimpi;
@@ -92,6 +103,7 @@ def run_sleep_consolidation(db_path: str) -> dict:
         "promoted_semantic_reflections": promoted_facts,
         "promoted_summaries": promoted_summaries,
         "pruned_trivial_episodes": pruned,
+        "telemetry_pruned": telemetry_pruned,
         "dreams_drafted": dream_stats["drafted"],
         "dreams_skipped_duplicate": dream_stats["skipped_duplicate"],
         "dreams_skipped_sensitive": dream_stats["skipped_sensitive"],

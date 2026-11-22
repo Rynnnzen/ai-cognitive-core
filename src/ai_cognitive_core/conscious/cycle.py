@@ -16,6 +16,15 @@ from ai_cognitive_core.conscious.layers.l5_metacognition import monitor_and_inte
 _DREAM_FRIENDLY_OCTANTS = {"Exuberant", "Relaxed", "Dependent", "Docile", "Bored/Depressed"}
 
 
+def _safe_optional(fn, default):
+    """v0.5.1 (M10): satu fitur opsional yang gagal tidak boleh mematikan
+    seluruh giliran — kembalikan nilai default dan lanjut."""
+    try:
+        return fn()
+    except Exception:
+        return default
+
+
 class CognitiveCycleRunner:
     """Orkestrator Siklus Kognitif Tertutup (Heart + Conscious + Memory)."""
 
@@ -85,8 +94,12 @@ class CognitiveCycleRunner:
 
         # 5. Conscious L3, L4, L5 (PSI, Inner Monologue, Metacognitive Inertia Check)
         psi_params = compute_psi_parameters(self.heart.state)
+        inertia_before = self.heart.state.emotional_inertia_pi1
         interrupted = monitor_and_interrupt_inertia(self.heart.state)
-        if interrupted:
+        # v0.5.1 (M13): simpan juga bila inersia berubah karena pemulihan
+        # bertahap (bukan hanya saat safeguard memutus) — proses MCP
+        # one-shot akan kehilangan perubahan yang tidak disimpan.
+        if interrupted or self.heart.state.emotional_inertia_pi1 != inertia_before:
             self.heart.save()
 
         broadcast.inner_monologue = synthesize_inner_monologue_seed(self.heart.state, directive)
@@ -102,17 +115,25 @@ class CognitiveCycleRunner:
         }
 
         # 5b. v0.4.1/v0.5.0 — L5 Procedural Habits, Worker Blackboard, Inside Joke, Sirkadian & Relasi
-        habits = self.memory.match_procedural_habits(
-            user_input, top_k=getattr(config, "HABIT_TOP_K", 3)
+        # v0.5.1 (M10): pemanggilan fitur opsional dibungkus agar satu
+        # kegagalan tidak mematikan seluruh giliran chat.
+        habits = _safe_optional(
+            lambda: self.memory.match_procedural_habits(
+                user_input, top_k=getattr(config, "HABIT_TOP_K", 3)
+            ),
+            [],
         )
         if habits:
             result["learned_habits"] = habits
 
-        active_workers = self.memory.list_worker_tasks(limit=5, only_active=True)
+        active_workers = _safe_optional(
+            lambda: self.memory.list_worker_tasks(limit=5, only_active=True),
+            [],
+        )
         if active_workers:
             result["worker_blackboard"] = active_workers
 
-        joke = self.memory.match_inside_joke(user_input)
+        joke = _safe_optional(lambda: self.memory.match_inside_joke(user_input), None)
         if joke:
             result["inside_joke_cue"] = joke
 
@@ -128,28 +149,37 @@ class CognitiveCycleRunner:
 
         # 6. v0.4.0 — konten proaktif (masing-masing MAKSIMAL 1 per perceive).
         texting_style = fast_heuristic_appraisal(user_input).texting_style_detected
-        curiosity = self.memory.select_curiosity_prompt(
-            user_text=user_input,
-            mood_octant=directive.mood_octant,
-            bubble_style=directive.bubble_style,
-            texting_style=texting_style,
-            total_turns=self.heart.state.total_turns,
+        curiosity = _safe_optional(
+            lambda: self.memory.select_curiosity_prompt(
+                user_text=user_input,
+                mood_octant=directive.mood_octant,
+                bubble_style=directive.bubble_style,
+                texting_style=texting_style,
+                total_turns=self.heart.state.total_turns,
+            ),
+            None,
         )
         if curiosity:
             result["curiosity_prompt"] = curiosity
 
-        reminder = self.memory.select_due_reminder(user_text=user_input)
+        reminder = _safe_optional(
+            lambda: self.memory.select_due_reminder(user_text=user_input),
+            None,
+        )
         if reminder:
             result["proactive_intent"] = reminder
 
         if directive.mood_octant in _DREAM_FRIENDLY_OCTANTS and not any(
             kw in user_input.lower() for kw in config.CURIOSITY_TASK_KEYWORDS
         ):
-            dream = self.memory.select_dream_to_surface()
+            dream = _safe_optional(lambda: self.memory.select_dream_to_surface(), None)
             if dream:
                 result["dream_idea"] = dream
 
-        photo = self.memory.select_photo_reference(user_text=user_input)
+        photo = _safe_optional(
+            lambda: self.memory.select_photo_reference(user_text=user_input),
+            None,
+        )
         if photo:
             result["photo_reference"] = photo
 

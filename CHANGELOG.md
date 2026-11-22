@@ -1,5 +1,28 @@
 # Changelog — ai_cognitive_core
 
+## [0.5.1] - 2026-11-23
+
+Audit-fix release **v0.5.1** — in-place fixes for all 5 Important findings (P1–P5) and 15 Minor findings (M1–M6, M8, M10–M17; M7 and M9 intentionally deferred) of the full v0.5.0 audit (2026-11-23), keeping the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the `v0.4.0` SQLite database. No schema version bump: the one new column is additive and idempotent.
+
+### Important fixes (P1–P5)
+- **Visible Drive init errors (P1) (`drive_bridge.py`, `mcp_server.py`):** `_init_drive_service` no longer swallows refresh/init errors with `except Exception: pass` — it logs them to `stderr` (never printing token/secret contents) and records `last_init_error`. `cognitive_get_status` exposes `drive_status` in the `v050` block (`connected`, `last_sync_utc`, `last_init_error`, plus a warning when offline or unsynced for over 6 hours).
+- **Honest sync stamp (P2) (`drive_bridge.py`):** `push_state` writes `last_sync_utc` to `sync_meta.json` only AFTER the heart/DB upload actually succeeds; offline or failed pushes leave it untouched and record `last_attempt_utc` instead.
+- **Atomic heart-state writes & no silent reset (P3) (`heart/engine.py`):** `save()` writes to a temp file and swaps it in with `os.replace()`, keeping a last-good `heart_state.json.bak`. `_load()` logs corrupt state, quarantines it as `heart_state.json.corrupt.<timestamp>`, and recovers from `.bak` before falling back to a fresh state.
+- **Content-based commit dedup (P4) (`memory/manager.py`):** when `turn_id` is empty (production callers never send one), `commit_turn_bundle` rejects an episode whose exact summary already exists within the last 120 seconds, returning the existing episode id instead of writing a duplicate row.
+- **Safe persona defaults (P5) (`mcp_server.py`):** all `cognitive_configure_persona` parameters now default to `None` (keep the current value); only explicitly provided fields change. Invalid `attachment_style` returns a clean JSON error instead of raising `ValueError`.
+
+### Minor fixes (M1–M17)
+- **Ebbinghaus pruning revived (M1/M2) (`manager.py`, `consolidation.py`):** importance floor lowered from `0.45` to `0.20` (`0.20 + 0.45|P| + 0.35|A|`), so light chats can fall below the `0.35` decay/dream thresholds; `energy_telemetry` is pruned to the newest 2000 rows per sleep cycle.
+- **Single tech-domain penalty & scan limit (M3/M4) (`l3_episodic_graph.py`):** `domain_mult` now applies once (final score), so the effective penalty is truly `0.65x`; the SQL scan uses `config.EPISODE_SCAN_LIMIT` instead of a hardcoded `250`.
+- **Slower trust evolution (M5) (`config.py`, `heart/engine.py`):** `TRUST_POS_DELTA = 0.004`, `TRUST_NEG_DELTA = -0.012`, and the stage thresholds moved to `config.py`.
+- **05:00 is morning (M6) (`config.py`, `l1_neurochemical.py`, `README.md`):** `CIRCADIAN_MORNING_START = 5` and `CIRCADIAN_DAYTIME_END = 18` in config; no hour falls through to the wrong phase.
+- **Working-memory dedup & truncation marker (M8) (`l2_working_paging.py`):** `promote()` dedups on `(role, content)` as well as `chunk_id`; over-long chunks are stored as `content[:499] + "…"`.
+- **Per-row recall resilience (M10) (`l3_episodic_graph.py`, `conscious/cycle.py`):** corrupt episode rows are skipped instead of failing the whole recall; optional perceive features (curiosity, reminder, dream, photo, inside joke, habits, worker blackboard) are each guarded so one failure cannot kill a turn.
+- **Fire-once heartbeat alerts & active-task protection (M11/M12) (`v040_store.py`, `migration.py`, `manager.py`):** additive `alerted_utc` column on `worker_tasks`; `evaluate_idle_heartbeat` reports each done/failed task once (`mark_worker_task_alerted` helper); pruning only ever deletes the oldest `done`/`failed` tasks, never `pending`/`running`.
+- **Gradual inertia recovery (M13) (`l5_metacognition.py`, `cycle.py`):** after a negative streak ends, inertia recovers `+0.02` per turn toward `0.35` instead of staying locked at `0.20`.
+- **Version & matching cleanups (M14–M17):** `mcp_server.py` imports `__version__` (no more hardcoded `"0.5.0"`); short inside-joke keywords (< 5 chars) must match as whole tokens; the fallback MCP server returns a JSON-RPC error instead of hanging the client; stale comments/docstrings refreshed in `config.py`, `migration.py`, `dreams.py`, `l4_appraisal.py`.
+- **Tests:** new `tests/test_v051.py` (23 tests) covering P1–P5, M1, M4–M6, M8, M10–M13, M15, and the version bump. Full suite: 58/58 passing.
+
 ## [0.5.0] - 2026-11-22
 
 Full expansion release **v0.5.0** — keeping the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the `v0.4.0` SQLite database.

@@ -65,7 +65,7 @@ def fast_heuristic_appraisal(user_text: str, elapsed_seconds: float = 0.0) -> St
     # Deteksi huruf dipanjangkan (contoh: sayanggg, yeyyy, iyaaa)
     elongated_hits = len(ELONGATED_RE.findall(stripped))
 
-    # Deteksi ALL CAPS (minimal 5 huruf alfabet dan >70% huruf besar)
+    # Deteksi ALL CAPS (minimal 5 huruf alfabet dan >=75% huruf besar)
     alpha_chars = [c for c in stripped if c.isalpha()]
     is_shouting_caps = len(alpha_chars) >= 5 and (sum(1 for c in alpha_chars if c.isupper()) / len(alpha_chars)) >= 0.75
 

@@ -897,16 +897,23 @@ def upsert_worker_task(
         """,
         (tid, worker_name[:80], (description or "")[:300], status, (result_summary or "")[:400], now_iso, now_iso),
     )
-    # Jaga jumlah baris tidak membengkak
+    # Jaga jumlah baris tidak membengkak.
+    # v0.5.1 (M12): prune HANYA tugas terminal (done/failed) terlama —
+    # jangan pernah menghapus tugas pending/running yang masih aktif.
     max_tasks = int(getattr(config, "MAX_ACTIVE_WORKER_TASKS", 30))
-    conn.execute(
-        """
-        DELETE FROM worker_tasks WHERE task_id NOT IN (
-            SELECT task_id FROM worker_tasks ORDER BY updated_utc DESC LIMIT ?
+    total = conn.execute("SELECT COUNT(*) FROM worker_tasks").fetchone()[0]
+    if total > max_tasks:
+        excess = total - max_tasks
+        conn.execute(
+            """
+            DELETE FROM worker_tasks WHERE task_id IN (
+                SELECT task_id FROM worker_tasks
+                WHERE status IN ('done', 'failed')
+                ORDER BY updated_utc ASC LIMIT ?
+            )
+            """,
+            (excess,),
         )
-        """,
-        (max_tasks,),
-    )
     _maybe_commit(conn, commit)
     return {"stored": True, "task_id": tid, "status": status, "action": "created"}
 
@@ -1013,7 +1020,17 @@ def match_inside_joke(
     best_score = 0
     for jid, phrase, meaning, kw_json, times_used in rows:
         kws = [k.lower() for k in _from_json_list(kw_json)]
-        hits = sum(1 for k in kws if k and (k in lower or k in q_tokens))
+        # v0.5.1 (M15): kata kunci pendek (< 5 huruf) wajib cocok sebagai
+        # token utuh — "api" tidak boleh cocok di "tapi"/"rapi".
+        hits = 0
+        for k in kws:
+            if not k:
+                continue
+            if len(k) >= 5:
+                if k in lower or k in q_tokens:
+                    hits += 1
+            elif k in q_tokens:
+                hits += 1
         if hits > best_score:
             best_score = hits
             best = {
@@ -1043,6 +1060,20 @@ def _is_quiet_hour(local_hour: int) -> bool:
     return start <= local_hour < end
 
 
+def mark_worker_task_alerted(
+    conn: sqlite3.Connection,
+    task_id: str,
+    commit: bool = True,
+) -> bool:
+    """Tandai tugas worker sudah dilaporkan via heartbeat (v0.5.1 M11)."""
+    cur = conn.execute(
+        "UPDATE worker_tasks SET alerted_utc = ? WHERE task_id = ?",
+        (utc_now_iso(), task_id),
+    )
+    _maybe_commit(conn, commit)
+    return cur.rowcount > 0
+
+
 def evaluate_idle_heartbeat(
     conn: sqlite3.Connection,
     *,
@@ -1051,7 +1082,12 @@ def evaluate_idle_heartbeat(
     is_resting: bool,
     local_hour: Optional[int] = None,
 ) -> dict:
-    """Evaluasi apakah agen wajar menyapa duluan saat idle (read-only, tanpa spam)."""
+    """Evaluasi apakah agen wajar menyapa duluan saat idle (tanpa spam).
+
+    v0.5.1 (M11): alert worker done/failed hanya dilaporkan sekali — tugas
+    yang dikembalikan ditandai alerted_utc agar tidak terulang di setiap
+    get_status berikutnya.
+    """
     if not getattr(config, "ENABLE_IDLE_HEARTBEAT", True):
         return {"should_initiate": False, "reason": "disabled"}
 
@@ -1086,14 +1122,18 @@ def evaluate_idle_heartbeat(
             }
 
     # 2. Worker bot ada yang selesai atau gagal -> lapor ke user
+    # v0.5.1 (M11): hanya tugas yang belum pernah dilaporkan
+    # (alerted_utc kosong); setelah dilaporkan, tandai agar tidak terulang.
     worker_alert = conn.execute(
         """
         SELECT task_id, worker_name, description, status, result_summary
         FROM worker_tasks WHERE status IN ('done', 'failed')
+        AND (alerted_utc IS NULL OR alerted_utc = '')
         ORDER BY updated_utc DESC LIMIT 1
         """
     ).fetchone()
     if worker_alert and elapsed_seconds >= 300:
+        mark_worker_task_alerted(conn, worker_alert[0], commit=True)
         return {
             "should_initiate": True,
             "reason": f"worker_task_{worker_alert[3]}",

@@ -4,6 +4,13 @@ from ai_cognitive_core import config
 from ai_cognitive_core.schemas import WorkingChunk
 
 
+def _truncate_content(content: str) -> str:
+    """Potong konten chunk ke 500 karakter dengan penanda (v0.5.1 M8)."""
+    if len(content) > 500:
+        return content[:499] + "…"
+    return content
+
+
 class WorkingMemoryPager:
     """L2 Working Memory Pager dengan dukungan persistensi SQLite (v0.5.0)."""
 
@@ -15,6 +22,12 @@ class WorkingMemoryPager:
         evicted: List[WorkingChunk] = []
         for existing in self.active_pages:
             if existing.chunk_id == chunk.chunk_id:
+                existing.access_count += 1
+                return evicted
+        # v0.5.1 (M8): dedup juga berdasarkan konten — retry perceive
+        # membuat chunk_id baru (UUID) untuk konten yang persis sama.
+        for existing in self.active_pages:
+            if existing.role == chunk.role and existing.content.strip() == chunk.content.strip():
                 existing.access_count += 1
                 return evicted
         if len(self.active_pages) >= self.capacity:
@@ -61,7 +74,7 @@ class WorkingMemoryPager:
                     (chunk_id, role, content, timestamp_utc, access_count)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    (c.chunk_id, c.role, c.content[:500], c.timestamp_utc, c.access_count),
+                    (c.chunk_id, c.role, _truncate_content(c.content), c.timestamp_utc, c.access_count),
                 )
             if commit:
                 conn.commit()

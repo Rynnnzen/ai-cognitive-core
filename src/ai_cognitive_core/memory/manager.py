@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 from ai_cognitive_core import config
@@ -141,7 +142,10 @@ class MemoryManager:
         entities = entities or [w.strip(".,!?").lower() for w in summary.split() if len(w) > 4][:6]
         vec = deterministic_embed(summary)
         arousal_weight = round(min(1.0, 0.4 + 0.6 * abs(pad_vector.A)), 4)
-        importance = round(min(1.0, 0.45 + 0.35 * abs(pad_vector.P) + 0.20 * abs(pad_vector.A)), 4)
+        # v0.5.1 (M1): lantai importance 0.45 -> 0.20 agar obrolan ringan
+        # bisa < 0.35 dan terkena peluruhan/pruning Ebbinghaus serta
+        # tersaring ambang mimpi (dulu selalu >= 0.45, ambang itu mati).
+        importance = round(min(1.0, 0.20 + 0.45 * abs(pad_vector.P) + 0.35 * abs(pad_vector.A)), 4)
 
         node = EpisodicNode(
             node_id=f"ep_{uuid.uuid4().hex[:10]}",
@@ -230,6 +234,27 @@ class MemoryManager:
                     "episode_id": marker["episode_id"] if marker else None,
                     "outcomes": {},
                 }
+
+            # v0.5.1 (P4): fallback dedup berbasis konten saat turn_id kosong
+            # (pemanggil produksi tidak pernah mengirim turn_id). Episode
+            # dengan summary persis sama dalam 120 detik terakhir = retry
+            # setelah respons hilang, bukan giliran baru.
+            if not turn_id:
+                cutoff = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+                existing = conn.execute(
+                    """
+                    SELECT node_id FROM episodic_nodes
+                    WHERE summary = ? AND timestamp_utc >= ?
+                    ORDER BY timestamp_utc DESC LIMIT 1
+                    """,
+                    (summary, cutoff),
+                ).fetchone()
+                if existing:
+                    return {
+                        "duplicate": True,
+                        "episode_id": existing[0],
+                        "outcomes": {},
+                    }
 
             node = self._insert_episode(conn, summary, pad_vector)
             outcomes: dict = {}
@@ -428,6 +453,14 @@ class MemoryManager:
         conn = self._connect()
         try:
             return v040_store.list_worker_tasks(conn, limit=limit, only_active=only_active)
+        finally:
+            conn.close()
+
+    def mark_worker_task_alerted(self, task_id: str) -> bool:
+        """v0.5.1 (M11): tandai tugas worker sudah dilaporkan via heartbeat."""
+        conn = self._connect()
+        try:
+            return v040_store.mark_worker_task_alerted(conn, task_id)
         finally:
             conn.close()
 

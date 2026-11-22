@@ -12,14 +12,17 @@ def current_local_hour(tz_offset_hours: Optional[int] = None) -> int:
 def get_circadian_phase(local_hour: int) -> str:
     ln_start = int(getattr(config, "CIRCADIAN_LATE_NIGHT_START", 23))
     ln_end = int(getattr(config, "CIRCADIAN_LATE_NIGHT_END", 5))
-    m_start = int(getattr(config, "CIRCADIAN_MORNING_START", 6))
+    m_start = int(getattr(config, "CIRCADIAN_MORNING_START", 5))
     m_end = int(getattr(config, "CIRCADIAN_MORNING_END", 11))
+    d_end = int(getattr(config, "CIRCADIAN_DAYTIME_END", 18))
     is_late = (local_hour >= ln_start or local_hour < ln_end) if ln_start > ln_end else (ln_start <= local_hour < ln_end)
     if is_late:
         return "late_night"
     if m_start <= local_hour < m_end:
         return "morning"
-    if 11 <= local_hour < 18:
+    # v0.5.1 (M6): batas daytime dari config (dulu hardcoded 11/18 dan jam
+    # 05:00 jatuh ke fallback evening karena morning mulai jam 06:00).
+    if m_end <= local_hour < d_end:
         return "daytime"
     return "evening"
 

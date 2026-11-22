@@ -29,7 +29,7 @@ _SENSITIVE_WORDS = (
 
 # Tema mimpi HANYA boleh berasal dari daftar konsep ini — kata benda, tempat,
 # dan momen yang enak dibaca sebagai tema kencan/foto. Di luar daftar, temanya
-# jatuh ke "momen manis". Daftar ini ada karena heuristik "entitas terpanjang"
+# jatuh ke "kita berdua". Daftar ini ada karena heuristik "entitas terpanjang"
 # terbukti gagal di data asli: token chat mentah seperti "sayanggg",
 # "ngomongin", atau "ututuuuu" sempat jadi tema mimpi yang tidak masuk akal.
 _THEME_CONCEPTS = frozenset({
