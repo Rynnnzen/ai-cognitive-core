@@ -1,4 +1,28 @@
 import math
+
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+
+def current_local_hour(tz_offset_hours: Optional[int] = None) -> int:
+    offset = int(getattr(config, "CIRCADIAN_TZ_OFFSET_HOURS", 7)) if tz_offset_hours is None else int(tz_offset_hours)
+    return (datetime.now(timezone.utc) + timedelta(hours=offset)).hour
+
+
+def get_circadian_phase(local_hour: int) -> str:
+    ln_start = int(getattr(config, "CIRCADIAN_LATE_NIGHT_START", 23))
+    ln_end = int(getattr(config, "CIRCADIAN_LATE_NIGHT_END", 5))
+    m_start = int(getattr(config, "CIRCADIAN_MORNING_START", 6))
+    m_end = int(getattr(config, "CIRCADIAN_MORNING_END", 11))
+    is_late = (local_hour >= ln_start or local_hour < ln_end) if ln_start > ln_end else (ln_start <= local_hour < ln_end)
+    if is_late:
+        return "late_night"
+    if m_start <= local_hour < m_end:
+        return "morning"
+    if 11 <= local_hour < 18:
+        return "daytime"
+    return "evening"
+
 from ai_cognitive_core import config
 from ai_cognitive_core.schemas import NeuroState, StimulusAppraisal
 
@@ -23,6 +47,7 @@ def apply_time_decay(
     neuro: NeuroState,
     delta_seconds: float,
     is_resting: bool = False,
+    local_hour: Optional[int] = None,
 ) -> NeuroState:
     if delta_seconds <= 0:
         return neuro
@@ -33,7 +58,11 @@ def apply_time_decay(
         if k == "energy":
             if is_resting:
                 # Recharging kurva eksponensial sesuai durasi tidur nyata
-                decay = math.exp(-delta_seconds / SLEEP_ENERGY_RECOVERY_TAU)
+                tau = SLEEP_ENERGY_RECOVERY_TAU
+                if local_hour is not None and getattr(config, "ENABLE_CIRCADIAN_RHYTHM", True):
+                    if get_circadian_phase(local_hour) == "morning":
+                        tau = tau / float(getattr(config, "CIRCADIAN_MORNING_RECHARGE_BONUS", 1.15))
+                decay = math.exp(-delta_seconds / tau)
                 target = max(SLEEP_TARGET_ENERGY, val)
                 data["energy"] = round(min(1.0, target - (target - val) * decay), 4)
             else:
@@ -55,6 +84,7 @@ def update_neurochemistry(
     neuro: NeuroState,
     appraisal: StimulusAppraisal,
     drain_energy: bool = True,
+    local_hour: Optional[int] = None,
 ) -> NeuroState:
     # Social buffering: Oksitosin meredam lonjakan kortisol
     social_buffer = max(0.35, 1.0 - 0.55 * neuro.oxytocin)
@@ -91,6 +121,9 @@ def update_neurochemistry(
             1.0 + config.ENERGY_NORADRENALINE_COEF * noradrenaline
             + config.ENERGY_CORTISOL_COEF * cortisol
         )
+        if local_hour is not None and getattr(config, "ENABLE_CIRCADIAN_RHYTHM", True):
+            if get_circadian_phase(local_hour) == "late_night":
+                drain *= float(getattr(config, "CIRCADIAN_LATE_NIGHT_DRAIN_MULT", 1.30))
         energy = min(1.0, max(config.ENERGY_FLOOR, neuro.energy - drain))
     else:
         energy = neuro.energy

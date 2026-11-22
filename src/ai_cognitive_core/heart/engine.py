@@ -8,7 +8,13 @@ from ai_cognitive_core.schemas import (
     StimulusAppraisal,
     utc_now_iso,
 )
-from ai_cognitive_core.heart.layers.l1_neurochemical import apply_time_decay, update_neurochemistry
+from ai_cognitive_core import config
+from ai_cognitive_core.heart.layers.l1_neurochemical import (
+    apply_time_decay,
+    current_local_hour,
+    get_circadian_phase,
+    update_neurochemistry,
+)
 from ai_cognitive_core.heart.layers.l2_primary_affect import compute_primary_affects
 from ai_cognitive_core.heart.layers.l3_mood_space import (
     decay_pad_over_time,
@@ -64,10 +70,12 @@ class HeartEngine:
         if delta_seconds <= 0:
             return 0.0
         old_energy = self.state.neuro.energy
+        local_hour = current_local_hour() if getattr(config, "ENABLE_CIRCADIAN_RHYTHM", True) else None
         self.state.neuro = apply_time_decay(
             self.state.neuro,
             delta_seconds,
             is_resting=self.state.is_resting,
+            local_hour=local_hour,
         )
         self.state.pad_current = decay_pad_over_time(
             self.state.pad_current,
@@ -115,16 +123,39 @@ class HeartEngine:
         self.state.core_needs = update_core_needs(self.state.core_needs, appraisal)
         att_mult = compute_attachment_multiplier(self.state.attachment_style)
 
-        # L1: Neurochemistry (Hanya kuras energi saat perceive, tidak double-drain saat commit)
-        self.state.neuro = update_neurochemistry(self.state.neuro, appraisal, drain_energy=drain_energy)
+        # L1: Neurochemistry + Ritme Sirkadian (v0.5.0)
+        local_hour = current_local_hour() if getattr(config, "ENABLE_CIRCADIAN_RHYTHM", True) else None
+        self.state.neuro = update_neurochemistry(
+            self.state.neuro, appraisal, drain_energy=drain_energy, local_hour=local_hour
+        )
 
         # L2: 7 Panksepp Circuits
         self.state.primary_affects = compute_primary_affects(
             self.state.neuro, self.state.core_needs, appraisal, att_mult
         )
 
-        # L3: PAD Pull-Push Engine & Coactivation
+        # L3: PAD Pull-Push Engine & Coactivation (terhubung ke L1/L2 + Sirkadian)
         pad_delta = appraisal_to_pad_delta(appraisal)
+        if self.state.neuro.energy < 0.45:
+            fatigue_ratio = (0.45 - self.state.neuro.energy) / 0.45
+            pad_delta.A -= 0.08 + 0.18 * fatigue_ratio
+        if local_hour is not None and get_circadian_phase(local_hour) == "late_night":
+            pad_delta.A -= 0.08
+        neg_affect = max(
+            self.state.primary_affects.FEAR,
+            self.state.primary_affects.RAGE,
+            self.state.primary_affects.PANIC_GRIEF,
+        )
+        pos_affect = max(
+            self.state.primary_affects.CARE,
+            self.state.primary_affects.PLAY,
+        )
+        if neg_affect > pos_affect:
+            pad_delta.P -= 0.25 * (neg_affect - pos_affect)
+        if max(self.state.primary_affects.FEAR, self.state.primary_affects.PANIC_GRIEF) >= 0.45:
+            pad_delta.D -= 0.15
+        pad_delta = pad_delta.clamp()
+
         self.state.pad_current = pull_push_update(
             self.state.pad_current,
             self.state.pad_baseline,
@@ -145,6 +176,25 @@ class HeartEngine:
 
         # L5: Ego Defense Shield
         self.state.active_defense = select_defense_mechanism(self.state)
+
+        # v0.5.0: Evolusi Relasi (trust_score & relationship_stage)
+        if getattr(config, "ENABLE_RELATIONSHIP_EVOLUTION", True):
+            trust_delta = 0.0
+            if appraisal.goal_conduciveness > 0.15 and appraisal.norm_compatibility >= 0.0:
+                trust_delta = 0.012
+            elif appraisal.goal_conduciveness < -0.25 or appraisal.norm_compatibility < -0.25:
+                trust_delta = -0.020
+            if trust_delta != 0.0:
+                self.state.trust_score = round(max(0.0, min(1.0, self.state.trust_score + trust_delta)), 4)
+            t = self.state.trust_score
+            if t >= 0.80:
+                self.state.relationship_stage = "deep_bond"
+            elif t >= 0.60:
+                self.state.relationship_stage = "close"
+            elif t >= 0.40:
+                self.state.relationship_stage = "warm"
+            else:
+                self.state.relationship_stage = "guarded"
 
         self.save()
         return self.build_directive(dominant_affect, secondary_affect, appraisal.texting_style_detected)
@@ -227,3 +277,16 @@ class HeartEngine:
             tone_instruction="; ".join(tone_parts),
             emoji_palette=emoji_palette,
         )
+
+    def apply_worker_outcome(self, status: str) -> None:
+        """v0.5.0: Reaksi emosional halus saat worker bot selesai atau gagal."""
+        if status == "done":
+            self.state.neuro.dopamine = round(min(1.0, self.state.neuro.dopamine + 0.06), 4)
+            self.state.pad_current = self.state.pad_current.clamp()
+            self.state.pad_current.P = round(min(1.0, self.state.pad_current.P + 0.08), 4)
+            self.save()
+        elif status == "failed":
+            self.state.neuro.cortisol = round(min(1.0, self.state.neuro.cortisol + 0.08), 4)
+            self.state.pad_current.P = round(max(-1.0, self.state.pad_current.P - 0.10), 4)
+            self.state.pad_current.A = round(min(1.0, self.state.pad_current.A + 0.08), 4)
+            self.save()

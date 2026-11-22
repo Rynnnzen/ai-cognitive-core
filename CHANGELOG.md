@@ -1,5 +1,21 @@
 # Changelog — ai_cognitive_core
 
+## [0.5.0] - 2026-11-22
+
+Full expansion release **v0.5.0** — keeping the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the `v0.4.0` SQLite database.
+
+### 5 New Expansions (`v0.5.0`)
+- **Persistent Working Memory (`l2_working_paging.py`, `manager.py`, `migration.py`):** Adds the additive `working_memory_chunks` table in SQLite (`WORKING_MEMORY_PERSIST_CAPACITY = 6`). Short-term context is now loaded automatically at startup and saved on every incoming message, so the conversation flow stays smooth across one-shot MCP calls.
+- **Circadian Rhythm (`l1_neurochemical.py`, `heart/engine.py`, `conscious/cycle.py`, `config.py`):** Adds local biological-clock awareness (default WIB / `UTC+7`, phases `morning`, `daytime`, `evening`, `late_night`). When staying up late (`23:00–04:59`), energy drain rises `1.30x` and arousal dips slightly so sleepiness feels natural; in the morning (`06:00–10:59`), sleep recovery is fresher (`1.15x`).
+- **Real Proactivity / Idle Heartbeat (`v040_store.py`, `manager.py`, `mcp_server.py`, `config.py`):** Adds `proactive_heartbeat` evaluation in `cognitive_get_status`, with quiet hours (`23:00–06:59`) to avoid spam. Prioritizes due reminders → worker-bot done/failed status → new dream stories / curiosity questions after idle `>= 45` minutes.
+- **Worker Bot Supervision Board (`v040_store.py`, `manager.py`, `heart/engine.py`, `cycle.py`, `mcp_server.py`):** Adds the additive `worker_tasks` table to record delegations to worker bots (`pending`, `running`, `done`, `failed`) via the optional `worker_task` parameter on `cognitive_commit_turn`. Active worker status appears in `worker_blackboard` on `perceive_and_think` & `get_status`, and `done`/`failed` outcomes give a subtle emotional reaction to the heart (`apply_worker_outcome`).
+- **Relationship Evolution & Inside Jokes (`schemas.py`, `heart/engine.py`, `v040_store.py`, `cycle.py`, `mcp_server.py`):** Adds `trust_score` (`0.0–1.0`) and `relationship_stage` (`guarded` / `warm` / `close` / `deep_bond`) that evolve slowly based on interaction quality. Adds the additive `inside_jokes` table (`add_inside_joke` on commit, automatic `inside_joke_cue` when relevant on `perceive_and_think`).
+
+### Includes All `v0.4.1` Improvements & Mood Calibration
+- **Dynamic Mood Calibration:** Stops the automatic positive pull in `commit_turn`, allows negative arousal in calm chat, connects L1/L2 to L3 PAD, and shifts the default baseline to `Relaxed` `(0.05, -0.05, 0.15)`.
+- **Guardrail Relaxation:** Curiosity cooldown `5` minutes, anti-skip dreams (`DREAM_TECHNICAL_WORD_THRESHOLD = 3`, 40 episode candidates), `HABIT_TOP_K = 3`, `HABIT_MIN_SCORE = -1`, `RECALL_TECH_DOMAIN_PENALTY = 0.65`, and `LUBB_STRICT_MODE = False`.
+- **Small Updates & Reliability:** Story-first-then-idea dreams (`dream_story`), L5 adaptation system (`amirhouieh/adapt`), rich photo memory metadata (`feeling`, `when_label`), on-topic recall, varied emoji, plus Drive-backup false-positive fixes & efficiency in sleep cycle + critical-energy limit (`<= 0.10`).
+
 ## [0.4.1] - 2026-11-21
 
 In-place update with no changes to the 3-pillar architecture (`memory`, `heart`, `conscious`) and 100% compatible with the `v0.4.0` SQLite schema.

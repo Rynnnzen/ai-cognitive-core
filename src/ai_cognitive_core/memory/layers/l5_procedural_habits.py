@@ -1,11 +1,12 @@
 """
-L5 Procedural Habits v0.4.1 — Sistem Adaptasi (terinspirasi amirhouieh/adapt,
+L5 Procedural Habits v0.4.1/v0.5.0 — Sistem Adaptasi (terinspirasi amirhouieh/adapt,
 Voyager Skill Library, dan Reflexion).
 """
 
 import sqlite3
 import uuid
 from typing import List, Optional
+from ai_cognitive_core import config
 from ai_cognitive_core.schemas import ProceduralHabit
 
 _STOPWORDS = {
@@ -26,13 +27,14 @@ def _tokenize(text: str) -> set:
 def match_habits(
     conn: sqlite3.Connection,
     user_input: str,
-    top_k: int = 2,
+    top_k: int = 3,
 ) -> List[ProceduralHabit]:
-    """Cocokkan skill/kepekaan yang sudah dipelajari dengan input user."""
+    min_score = int(getattr(config, "HABIT_MIN_SCORE", -1))
     cur = conn.cursor()
     cur.execute(
         "SELECT habit_id, trigger_pattern, action_template, success_count "
-        "FROM procedural_habits WHERE success_count >= 0"
+        "FROM procedural_habits WHERE success_count >= ?",
+        (min_score,),
     )
     lower = (user_input or "").lower()
     input_tokens = _tokenize(lower)
@@ -77,7 +79,6 @@ def learn_habit(
     action_template: str,
     commit: bool = True,
 ) -> dict:
-    """Simpan skill/kepekaan baru atau evolusikan aturan lama untuk trigger yang sama."""
     trigger = (trigger_pattern or "").strip()
     action = (action_template or "").strip()
     if not trigger or not action:
@@ -116,7 +117,6 @@ def reinforce_habit(
     delta: int = 1,
     commit: bool = True,
 ) -> Optional[dict]:
-    """Perkuat (+1) atau perlemah (-1) habit berdasarkan hasil interaksi."""
     if not habit_id:
         return None
     cur = conn.cursor()

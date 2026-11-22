@@ -4,6 +4,8 @@ from typing import Optional
 from ai_cognitive_core import config
 from ai_cognitive_core.drive_bridge import DriveSyncBridge
 from ai_cognitive_core.heart.engine import HeartEngine
+from ai_cognitive_core.heart.layers.l1_neurochemical import current_local_hour, get_circadian_phase
+from ai_cognitive_core.heart.layers.l3_mood_space import detect_coactivation
 from ai_cognitive_core.heart import phrase_bank
 from ai_cognitive_core.memory.manager import MemoryManager
 from ai_cognitive_core.memory.consolidation import run_sleep_consolidation
@@ -42,7 +44,7 @@ except ImportError:
                             "result": {
                                 "protocolVersion": "2024-11-05",
                                 "capabilities": {"tools": {}},
-                                "serverInfo": {"name": self.name, "version": "0.4.1"},
+                                "serverInfo": {"name": self.name, "version": "0.5.0"},
                             },
                         }
                         sys.stdout.write(json.dumps(resp) + "\n")
@@ -132,10 +134,10 @@ def cognitive_commit_turn(
     user_input: str,
     agent_response: str,
     inner_monologue: str = "",
-    novelty: float = 0.0,
-    goal_conduciveness: float = 0.1,
-    coping_potential: float = 0.7,
-    norm_compatibility: float = 0.2,
+    novelty: Optional[float] = None,
+    goal_conduciveness: Optional[float] = None,
+    coping_potential: Optional[float] = None,
+    norm_compatibility: Optional[float] = None,
     # --- v0.4.0: semua parameter baru opsional (kompatibel ke belakang) ---
     turn_id: str = "",
     propose_question: Optional[dict] = None,
@@ -150,9 +152,11 @@ def cognitive_commit_turn(
     photo_moment_id: str = "",
     photo_moment_action: str = "",
     photo_moment_correction: Optional[dict] = None,
-    # --- v0.4.1: sistem adaptasi (opsional, kompatibel ke belakang) ---
+    # --- v0.4.1/v0.5.0: parameter opsional (100% kompatibel ke belakang) ---
     learn_habit: Optional[dict] = None,
     habit_feedback: Optional[dict] = None,
+    worker_task: Optional[dict] = None,
+    add_inside_joke: Optional[dict] = None,
 ) -> str:
     """
     Jalankan Fase 2 Siklus Kognitif Tertutup (Koreksi Appraisal SEC/OCC tanpa Double Energy Drain ->
@@ -185,14 +189,20 @@ def cognitive_commit_turn(
                 indent=2,
             )
 
-    appraisal = StimulusAppraisal(
-        novelty=max(-1.0, min(1.0, float(novelty))),
-        goal_conduciveness=max(-1.0, min(1.0, float(goal_conduciveness))),
-        coping_potential=max(0.0, min(1.0, float(coping_potential))),
-        norm_compatibility=max(-1.0, min(1.0, float(norm_compatibility))),
+    has_explicit_appraisal = any(
+        v is not None for v in (novelty, goal_conduciveness, coping_potential, norm_compatibility)
     )
-    # drain_energy=False agar energi tidak terkuras 2x dalam 1 giliran chat
-    directive = heart.step(user_input, explicit_appraisal=appraisal, drain_energy=False)
+    if has_explicit_appraisal:
+        appraisal = StimulusAppraisal(
+            novelty=max(-1.0, min(1.0, float(0.0 if novelty is None else novelty))),
+            goal_conduciveness=max(-1.0, min(1.0, float(0.0 if goal_conduciveness is None else goal_conduciveness))),
+            coping_potential=max(0.0, min(1.0, float(0.5 if coping_potential is None else coping_potential))),
+            norm_compatibility=max(-1.0, min(1.0, float(0.0 if norm_compatibility is None else norm_compatibility))),
+        )
+        directive = heart.step(user_input, explicit_appraisal=appraisal, drain_energy=False)
+    else:
+        dom, sec = detect_coactivation(heart.state.primary_affects)
+        directive = heart.build_directive(dom, sec)
     memory.ingest_sensory_input(agent_response, role="assistant")
 
     summary = f"User: {user_input[:160]} | AI ({directive.mood_octant}): {agent_response[:160]}"
@@ -230,21 +240,36 @@ def cognitive_commit_turn(
             indent=2,
         )
 
-    # v0.4.1: sistem adaptasi L5 (learn_habit & habit_feedback)
-    habit_outcomes = {}
+    # v0.4.1/v0.5.0: adaptasi L5, worker blackboard, & inside jokes
+    v050_outcomes = {}
     if isinstance(learn_habit, dict) and learn_habit.get("trigger_pattern") and learn_habit.get("action_template"):
-        habit_outcomes["learned"] = memory.learn_procedural_habit(
+        v050_outcomes["habit_learned"] = memory.learn_procedural_habit(
             learn_habit.get("trigger_pattern", ""),
             learn_habit.get("action_template", ""),
         )
     if isinstance(habit_feedback, dict) and habit_feedback.get("habit_id"):
-        habit_outcomes["reinforced"] = memory.reinforce_procedural_habit(
+        v050_outcomes["habit_reinforced"] = memory.reinforce_procedural_habit(
             habit_feedback["habit_id"],
             delta=int(habit_feedback.get("delta", 1)),
         )
+    if isinstance(worker_task, dict) and worker_task.get("worker_name"):
+        wt_res = memory.upsert_worker_task(
+            worker_name=worker_task.get("worker_name", ""),
+            description=worker_task.get("description", ""),
+            status=worker_task.get("status", "pending"),
+            result_summary=worker_task.get("result_summary", ""),
+            task_id=worker_task.get("task_id"),
+        )
+        v050_outcomes["worker_task"] = wt_res
+        if wt_res.get("stored") and wt_res.get("status") in {"done", "failed"}:
+            heart.apply_worker_outcome(wt_res["status"])
+    if isinstance(add_inside_joke, dict) and add_inside_joke.get("phrase"):
+        v050_outcomes["inside_joke"] = memory.add_inside_joke(
+            phrase=add_inside_joke.get("phrase", ""),
+            meaning=add_inside_joke.get("meaning", ""),
+            trigger_keywords=add_inside_joke.get("trigger_keywords"),
+        )
 
-    # Push SINKRON (v0.4.1): DB penuh di-upload saat sleep_cycle, saat energi
-    # kritis (<= DRIVE_CRITICAL_ENERGY_THRESHOLD), atau jika DRIVE_PUSH_DB_ON_COMMIT=True.
     critical_energy = heart.state.neuro.energy <= getattr(config, "DRIVE_CRITICAL_ENERGY_THRESHOLD", 0.10)
     push_db = getattr(config, "DRIVE_PUSH_DB_ON_COMMIT", False) or critical_energy
     synced = bridge.push_state(include_memory_db=push_db, async_mode=False)
@@ -260,7 +285,7 @@ def cognitive_commit_turn(
             "gdrive_synced": synced,
             "gdrive_db_included": push_db,
             "v040_outcomes": bundle.get("outcomes", {}),
-            "habit_outcomes": habit_outcomes,
+            "v050_outcomes": v050_outcomes,
         },
         ensure_ascii=False,
         indent=2,
@@ -320,15 +345,32 @@ def cognitive_get_status() -> str:
             "energy_telemetry": config.ENABLE_ENERGY_TELEMETRY,
         },
     }
+    local_hour = current_local_hour()
+    snapshot["v050"] = {
+        "core_version": "0.5.0",
+        "circadian": {"local_hour": local_hour, "phase": get_circadian_phase(local_hour)},
+        "relationship": {
+            "trust_score": heart.state.trust_score,
+            "stage": heart.state.relationship_stage,
+        },
+        "working_memory_chunks": len(memory.working.active_pages),
+        "worker_blackboard": memory.list_worker_tasks(limit=10, only_active=False),
+        "proactive_heartbeat": memory.evaluate_idle_heartbeat(
+            elapsed_seconds=elapsed,
+            energy=heart.state.neuro.energy,
+            is_resting=heart.state.is_resting,
+            local_hour=local_hour,
+        ),
+    }
     return json.dumps(snapshot, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
 def cognitive_configure_persona(
     attachment_style: str = "Avoidant",
-    baseline_p: float = 0.10,
-    baseline_a: float = 0.15,
-    baseline_d: float = 0.35,
+    baseline_p: float = 0.05,
+    baseline_a: float = -0.05,
+    baseline_d: float = 0.15,
     inertia_pi1: float = 0.45,
 ) -> str:
     """Sesuaikan cetak biru kepribadian dasar (Attachment Style, PAD_0, dan inersia pi_1)."""

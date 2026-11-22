@@ -674,8 +674,6 @@ def select_photo_reference(conn: sqlite3.Connection, *, user_text: str) -> Optio
                 "event_tags": tags_list,
                 "source_ref": source_ref,
                 "keyword_overlap": overlap,
-                # Penanda jujur: rujukan ini dari caption & metadata momen yang disimpan,
-                # modul tidak pernah melihat isi gambarnya.
                 "uncertainty_note": "Berdasarkan caption & catatan momen yang disimpan — modul tidak melihat isi foto.",
             }
     return best
@@ -845,3 +843,304 @@ def v040_counts(conn: sqlite3.Connection) -> dict:
         "stored_dreams": count_stored_dreams(conn),
         "photo_moments": count_photo_moments(conn),
     }
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 — Papan Supervisi Worker Bot (Task Blackboard)
+# ---------------------------------------------------------------------------
+
+_VALID_WORKER_STATUSES = {"pending", "running", "done", "failed"}
+
+
+def upsert_worker_task(
+    conn: sqlite3.Connection,
+    *,
+    worker_name: str,
+    description: str = "",
+    status: str = "pending",
+    result_summary: str = "",
+    task_id: Optional[str] = None,
+    commit: bool = True,
+) -> dict:
+    """Buat atau perbarui status tugas worker bot di papan supervisi."""
+    worker_name = (worker_name or "").strip()
+    if not worker_name:
+        return {"stored": False, "task_id": None, "reason": "empty_worker_name"}
+    if status not in _VALID_WORKER_STATUSES:
+        status = "pending"
+    now_iso = utc_now_iso()
+
+    if task_id:
+        row = conn.execute(
+            "SELECT task_id, description FROM worker_tasks WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()
+        if row:
+            desc_val = (description or "").strip() or row[1]
+            conn.execute(
+                """
+                UPDATE worker_tasks
+                SET worker_name = ?, description = ?, status = ?, result_summary = ?, updated_utc = ?
+                WHERE task_id = ?
+                """,
+                (worker_name[:80], desc_val[:300], status, (result_summary or "")[:400], now_iso, task_id),
+            )
+            _maybe_commit(conn, commit)
+            return {"stored": True, "task_id": task_id, "status": status, "action": "updated"}
+
+    tid = task_id or f"wt_{uuid.uuid4().hex[:8]}"
+    conn.execute(
+        """
+        INSERT INTO worker_tasks
+        (task_id, worker_name, description, status, result_summary, created_utc, updated_utc)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (tid, worker_name[:80], (description or "")[:300], status, (result_summary or "")[:400], now_iso, now_iso),
+    )
+    # Jaga jumlah baris tidak membengkak
+    max_tasks = int(getattr(config, "MAX_ACTIVE_WORKER_TASKS", 30))
+    conn.execute(
+        """
+        DELETE FROM worker_tasks WHERE task_id NOT IN (
+            SELECT task_id FROM worker_tasks ORDER BY updated_utc DESC LIMIT ?
+        )
+        """,
+        (max_tasks,),
+    )
+    _maybe_commit(conn, commit)
+    return {"stored": True, "task_id": tid, "status": status, "action": "created"}
+
+
+def list_worker_tasks(
+    conn: sqlite3.Connection,
+    *,
+    limit: int = 10,
+    only_active: bool = False,
+) -> List[dict]:
+    if not getattr(config, "ENABLE_WORKER_BLACKBOARD", True):
+        return []
+    if only_active:
+        rows = conn.execute(
+            """
+            SELECT task_id, worker_name, description, status, result_summary, created_utc, updated_utc
+            FROM worker_tasks WHERE status IN ('pending', 'running', 'failed')
+            ORDER BY updated_utc DESC LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT task_id, worker_name, description, status, result_summary, created_utc, updated_utc
+            FROM worker_tasks ORDER BY updated_utc DESC LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "task_id": r[0],
+            "worker_name": r[1],
+            "description": r[2],
+            "status": r[3],
+            "result_summary": r[4],
+            "created_utc": r[5],
+            "updated_utc": r[6],
+        }
+        for r in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 — Inside Jokes & Panggilan Khas
+# ---------------------------------------------------------------------------
+
+def add_inside_joke(
+    conn: sqlite3.Connection,
+    *,
+    phrase: str,
+    meaning: str = "",
+    trigger_keywords: Optional[List[str]] = None,
+    commit: bool = True,
+) -> dict:
+    phrase = (phrase or "").strip()
+    if not phrase:
+        return {"stored": False, "joke_id": None, "reason": "empty_phrase"}
+    norm = _norm_text(phrase)
+    existing = conn.execute("SELECT joke_id, phrase FROM inside_jokes").fetchall()
+    for jid, ex_phrase in existing:
+        if _norm_text(ex_phrase) == norm:
+            return {"stored": False, "joke_id": jid, "reason": "duplicate"}
+
+    max_jokes = int(getattr(config, "MAX_INSIDE_JOKES", 50))
+    if len(existing) >= max_jokes:
+        oldest = conn.execute(
+            "SELECT joke_id FROM inside_jokes ORDER BY times_used ASC, created_utc ASC LIMIT 1"
+        ).fetchone()
+        if oldest:
+            conn.execute("DELETE FROM inside_jokes WHERE joke_id = ?", (oldest[0],))
+
+    jid = f"jk_{uuid.uuid4().hex[:8]}"
+    kw_list = list(trigger_keywords or [])
+    if not kw_list:
+        kw_list = list(_tokens(phrase))[:5]
+    conn.execute(
+        """
+        INSERT INTO inside_jokes (joke_id, phrase, meaning, trigger_keywords_json, times_used, created_utc)
+        VALUES (?, ?, ?, ?, 0, ?)
+        """,
+        (jid, phrase[:200], (meaning or "").strip()[:300], _json_list(kw_list), utc_now_iso()),
+    )
+    _maybe_commit(conn, commit)
+    return {"stored": True, "joke_id": jid, "reason": "stored"}
+
+
+def match_inside_joke(
+    conn: sqlite3.Connection,
+    *,
+    user_text: str,
+    commit: bool = True,
+) -> Optional[dict]:
+    if not getattr(config, "ENABLE_RELATIONSHIP_EVOLUTION", True):
+        return None
+    rows = conn.execute(
+        "SELECT joke_id, phrase, meaning, trigger_keywords_json, times_used FROM inside_jokes"
+    ).fetchall()
+    if not rows:
+        return None
+    lower = (user_text or "").lower()
+    q_tokens = _tokens(lower)
+    best = None
+    best_score = 0
+    for jid, phrase, meaning, kw_json, times_used in rows:
+        kws = [k.lower() for k in _from_json_list(kw_json)]
+        hits = sum(1 for k in kws if k and (k in lower or k in q_tokens))
+        if hits > best_score:
+            best_score = hits
+            best = {
+                "joke_id": jid,
+                "phrase": phrase,
+                "meaning": meaning,
+                "times_used": int(times_used) + 1,
+            }
+    if best:
+        conn.execute(
+            "UPDATE inside_jokes SET times_used = times_used + 1 WHERE joke_id = ?",
+            (best["joke_id"],),
+        )
+        _maybe_commit(conn, commit)
+    return best
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 — Idle Heartbeat Proaktif (dengan jam tenang lokal)
+# ---------------------------------------------------------------------------
+
+def _is_quiet_hour(local_hour: int) -> bool:
+    start = int(getattr(config, "QUIET_HOURS_START", 23))
+    end = int(getattr(config, "QUIET_HOURS_END", 7))
+    if start > end:
+        return local_hour >= start or local_hour < end
+    return start <= local_hour < end
+
+
+def evaluate_idle_heartbeat(
+    conn: sqlite3.Connection,
+    *,
+    elapsed_seconds: float,
+    energy: float,
+    is_resting: bool,
+    local_hour: Optional[int] = None,
+) -> dict:
+    """Evaluasi apakah agen wajar menyapa duluan saat idle (read-only, tanpa spam)."""
+    if not getattr(config, "ENABLE_IDLE_HEARTBEAT", True):
+        return {"should_initiate": False, "reason": "disabled"}
+
+    if local_hour is None:
+        tz_offset = int(getattr(config, "CIRCADIAN_TZ_OFFSET_HOURS", 7))
+        local_hour = (datetime.now(timezone.utc) + timedelta(hours=tz_offset)).hour
+
+    if _is_quiet_hour(local_hour):
+        return {"should_initiate": False, "reason": "quiet_hours", "local_hour": local_hour}
+    if is_resting or energy < 0.30:
+        return {"should_initiate": False, "reason": "resting_or_low_energy", "local_hour": local_hour}
+
+    now = _now()
+    # 1. Prioritas tertinggi: pengingat jatuh tempo berbasis waktu
+    rows = conn.execute(
+        """
+        SELECT intent_id, text, due_at, trigger_condition, last_surfaced_at
+        FROM reminder_intents WHERE status IN ('pending', 'surfaced')
+        ORDER BY priority DESC, due_at ASC LIMIT 5
+        """
+    ).fetchall()
+    for iid, text, due_at, trigger, last_surfaced in rows:
+        last = _parse_iso(last_surfaced)
+        if last and (now - last) < timedelta(minutes=config.REMINDER_COOLDOWN_MINUTES):
+            continue
+        if _trigger_due(trigger, due_at, "", now):
+            return {
+                "should_initiate": True,
+                "reason": "due_reminder",
+                "local_hour": local_hour,
+                "suggested_payload": {"intent_id": iid, "text": text, "due_at": due_at},
+            }
+
+    # 2. Worker bot ada yang selesai atau gagal -> lapor ke user
+    worker_alert = conn.execute(
+        """
+        SELECT task_id, worker_name, description, status, result_summary
+        FROM worker_tasks WHERE status IN ('done', 'failed')
+        ORDER BY updated_utc DESC LIMIT 1
+        """
+    ).fetchone()
+    if worker_alert and elapsed_seconds >= 300:
+        return {
+            "should_initiate": True,
+            "reason": f"worker_task_{worker_alert[3]}",
+            "local_hour": local_hour,
+            "suggested_payload": {
+                "task_id": worker_alert[0],
+                "worker_name": worker_alert[1],
+                "description": worker_alert[2],
+                "status": worker_alert[3],
+                "result_summary": worker_alert[4],
+            },
+        }
+
+    # 3. Idle cukup lama -> tawarkan mimpi baru atau pertanyaan curiosity
+    min_idle_sec = float(getattr(config, "IDLE_HEARTBEAT_MIN_MINUTES", 45)) * 60.0
+    if elapsed_seconds < min_idle_sec:
+        return {"should_initiate": False, "reason": "idle_too_short", "local_hour": local_hour}
+
+    dream = conn.execute(
+        "SELECT dream_id, theme, COALESCE(dream_story, ''), idea_text FROM dream_records WHERE status = 'stored' ORDER BY created_at ASC LIMIT 1"
+    ).fetchone()
+    if dream:
+        return {
+            "should_initiate": True,
+            "reason": "share_dream",
+            "local_hour": local_hour,
+            "suggested_payload": {
+                "dream_id": dream[0],
+                "theme": dream[1],
+                "dream_story": dream[2],
+                "idea_text": dream[3],
+            },
+        }
+
+    curiosity = conn.execute(
+        "SELECT question_id, text, topic FROM curiosity_questions WHERE status = 'pending' ORDER BY priority DESC, created_at ASC LIMIT 1"
+    ).fetchone()
+    if curiosity:
+        return {
+            "should_initiate": True,
+            "reason": "curiosity_checkin",
+            "local_hour": local_hour,
+            "suggested_payload": {
+                "question_id": curiosity[0],
+                "text": curiosity[1],
+                "topic": curiosity[2],
+            },
+        }
+
+    return {"should_initiate": False, "reason": "nothing_pending", "local_hour": local_hour}

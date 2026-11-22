@@ -37,8 +37,8 @@ ENERGY_FLOOR = 0.05              # tidak berubah dari v0.3.1
 # Curiosity
 # ---------------------------------------------------------------------------
 MAX_PENDING_CURIOSITY = 20       # pertanyaan pending terbanyak yang disimpan
-CURIOSITY_COOLDOWN_MINUTES = 10  # v0.4.1: lebih sering muncul (v0.4.0: 30)  # jeda minimum antar penawaran pertanyaan
-CURIOSITY_MIN_TURNS_BETWEEN = 1  # v0.4.1: jeda 1 turn (v0.4.0: 3)  # jeda minimum (dalam turn) antar penawaran
+CURIOSITY_COOLDOWN_MINUTES = 5  # v0.4.1/v0.5.0: lebih longgar & sering muncul (v0.4.0: 30)  # jeda minimum antar penawaran pertanyaan
+CURIOSITY_MIN_TURNS_BETWEEN = 1  # v0.4.1/v0.5.0: jeda 1 turn (v0.4.0: 3)  # jeda minimum (dalam turn) antar penawaran
 CURIOSITY_DEFAULT_TTL_DAYS = 14  # pertanyaan kedaluwarsa setelah 14 hari
 CURIOSITY_CANDIDATE_BUDGET = 5   # kandidat yang dinilai per perceive (top 1 dikembalikan)
 # Kata kunci distres: curiosity TIDAK ditawarkan saat turn menyentuh topik ini.
@@ -49,7 +49,7 @@ CURIOSITY_SENSITIVE_KEYWORDS = (
 )
 # Kata kunci tugas eksplisit: curiosity ditunda saat user sedang meminta sesuatu.
 CURIOSITY_TASK_KEYWORDS = (
-    "cari", "cek", "buatin", "bikinin", "kirim", "update", "install",
+    "cari", "cek", "buatin", "bikinin", "install",
     "tolong", "minta", "download", "upload", "lapor", "riset", "bedah",
 )
 
@@ -67,7 +67,7 @@ REMINDER_REPEAT_POLICIES = ("none", "daily")
 # ---------------------------------------------------------------------------
 DREAMS_PER_SLEEP_MAX = 3         # ide mimpi terbanyak yang dirangkai per sleep cycle
 MAX_STORED_DREAMS = 30           # DreamRecord tersimpan terbanyak (yang lama di-prune)
-DREAM_MIN_EPISODE_IMPORTANCE = 0.35  # v0.4.1: turunkan ambang agar mimpi tidak mudah habis (v0.4.0: 0.45)  # episode di bawah ini tidak dipakai sebagai sumber mimpi
+DREAM_MIN_EPISODE_IMPORTANCE = 0.35  # v0.4.1/v0.5.0: turunkan ambang agar mimpi tidak mudah habis  # episode di bawah ini tidak dipakai sebagai sumber mimpi
 
 # ---------------------------------------------------------------------------
 # Ingatan foto
@@ -99,21 +99,50 @@ MAX_WORDS_RANGE = {
 }
 
 # ---------------------------------------------------------------------------
-# Parameter v0.4.1 — Drive Sync, Adaptasi (L5), Mimpi, & Emoji Variatif
+# Parameter v0.4.1 — Drive Sync, Adaptasi (L5), Mimpi, Emoji, & Guardrail Longgar
 # ---------------------------------------------------------------------------
 ENABLE_DRIVE_SYNC = True
-# False = DB SQLite penuh di-upload saat sleep_cycle & saat energi kritis (chat lebih cepat).
-# True  = DB SQLite ikut di-upload setiap commit_turn.
 DRIVE_PUSH_DB_ON_COMMIT = False
 DRIVE_CRITICAL_ENERGY_THRESHOLD = 0.10
 
-# Mimpi anti-skip (v0.4.1)
-DREAM_CANDIDATE_LIMIT = 40          # v0.4.0: 20
-DREAM_TECHNICAL_WORD_THRESHOLD = 2  # skip teknis hanya jika >= 2 kata teknis
+DREAM_CANDIDATE_LIMIT = 40
+DREAM_TECHNICAL_WORD_THRESHOLD = 3
 
-# Sistem adaptasi / procedural memory (terinspirasi amirhouieh/adapt)
 ENABLE_ADAPTIVE_HABITS = True
-HABIT_TOP_K = 2
+HABIT_TOP_K = 3
+HABIT_MIN_SCORE = -1
 
-# Emoji variatif sesuai konteks (phrase_bank)
+RECALL_TECH_DOMAIN_PENALTY = 0.65
+LUBB_STRICT_MODE = False
 ENABLE_EMOJI_PALETTE = True
+
+# ---------------------------------------------------------------------------
+# Parameter v0.5.0 — Ekspansi Penuh
+# 1. Persistent Working Memory (L2 SQLite)
+# 2. Ritme Sirkadian (jam biologis lokal)
+# 3. Idle Heartbeat Proaktif (dengan jam tenang)
+# 4. Papan Supervisi Worker Bot (Task Blackboard)
+# 5. Evolusi Relasi (Trust) & Inside Jokes
+# ---------------------------------------------------------------------------
+ENABLE_PERSISTENT_WORKING_MEMORY = True
+WORKING_MEMORY_PERSIST_CAPACITY = 6
+
+ENABLE_CIRCADIAN_RHYTHM = True
+CIRCADIAN_TZ_OFFSET_HOURS = 7       # Default WIB (UTC+7)
+CIRCADIAN_LATE_NIGHT_START = 23     # 23:00 - 04:59: fase begadang (drain lebih cepat)
+CIRCADIAN_LATE_NIGHT_END = 5
+CIRCADIAN_MORNING_START = 6         # 06:00 - 10:59: fase pagi segar
+CIRCADIAN_MORNING_END = 11
+CIRCADIAN_LATE_NIGHT_DRAIN_MULT = 1.30
+CIRCADIAN_MORNING_RECHARGE_BONUS = 1.15
+
+ENABLE_IDLE_HEARTBEAT = True
+QUIET_HOURS_START = 23              # Jam tenang proaktif: 23:00 - 06:59
+QUIET_HOURS_END = 7
+IDLE_HEARTBEAT_MIN_MINUTES = 45     # Minimal idle 45 menit sebelum sapa proaktif ringan
+
+ENABLE_WORKER_BLACKBOARD = True
+MAX_ACTIVE_WORKER_TASKS = 30
+
+ENABLE_RELATIONSHIP_EVOLUTION = True
+MAX_INSIDE_JOKES = 50

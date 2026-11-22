@@ -104,10 +104,7 @@ _STRICT_TECHNICAL_WORDS = {
 
 
 def _is_technical_summary(summary: str) -> bool:
-    """True bila ringkasan episode benar-benar didominasi topik teknis.
-
-    v0.4.1: tidak lagi men-skip hanya karena 1 kata umum seperti "update" atau "link".
-    """
+    """True bila ringkasan episode benar-benar didominasi topik teknis."""
     words = _summary_words(summary)
     tech_hits = words & _TECHNICAL_WORDS
     if not tech_hits:
@@ -115,7 +112,7 @@ def _is_technical_summary(summary: str) -> bool:
     has_personal_theme = bool(words & _THEME_CONCEPTS)
     if (words & _STRICT_TECHNICAL_WORDS) and not has_personal_theme:
         return True
-    threshold = getattr(config, "DREAM_TECHNICAL_WORD_THRESHOLD", 2)
+    threshold = getattr(config, "DREAM_TECHNICAL_WORD_THRESHOLD", 3)
     return len(tech_hits) >= threshold
 
 _DATE_TEMPLATES = (

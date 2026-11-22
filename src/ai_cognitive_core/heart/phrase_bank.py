@@ -172,9 +172,6 @@ def select_max_words(bubble_style: str, seed_material: str) -> int:
     idx, _ = _seed_index(f"maxwords:{bubble_style}", seed_material, high - low + 1)
     return low + idx
 
-# ---------------------------------------------------------------------------
-# v0.4.1 — Palet emoji variatif sesuai konteks (mood octant & bubble style)
-# ---------------------------------------------------------------------------
 EMOJI_PALETTES: Dict[str, List[List[str]]] = {
     "Exuberant": [["✨", "😆", "💛"], ["🎉", "😄", "🌟"], ["💫", "😊", "🙌"]],
     "Dependent": [["🥺", "💗", "✨"], ["🌸", "🤍", "😊"], ["🫶", "💫", "🥰"]],

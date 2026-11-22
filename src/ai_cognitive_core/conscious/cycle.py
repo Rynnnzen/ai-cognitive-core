@@ -2,6 +2,7 @@ from typing import Optional
 from ai_cognitive_core import config
 from ai_cognitive_core.schemas import ConsciousBroadcast, EmotionalDirective
 from ai_cognitive_core.heart.engine import HeartEngine
+from ai_cognitive_core.heart.layers.l1_neurochemical import current_local_hour, get_circadian_phase
 from ai_cognitive_core.heart import phrase_bank
 from ai_cognitive_core.heart.layers.l4_appraisal import fast_heuristic_appraisal
 from ai_cognitive_core.memory.manager import MemoryManager
@@ -12,7 +13,7 @@ from ai_cognitive_core.conscious.layers.l4_agency_volition import synthesize_inn
 from ai_cognitive_core.conscious.layers.l5_metacognition import monitor_and_interrupt_inertia
 
 # Mimpi hanya ditawarkan saat suasana santai/positif (bukan saat tugas/tegang).
-_DREAM_FRIENDLY_OCTANTS = {"Exuberant", "Relaxed", "Dependent", "Docile"}
+_DREAM_FRIENDLY_OCTANTS = {"Exuberant", "Relaxed", "Dependent", "Docile", "Bored/Depressed"}
 
 
 class CognitiveCycleRunner:
@@ -100,12 +101,30 @@ class CognitiveCycleRunner:
             "semantic_facts": [f.model_dump() for f in facts],
         }
 
-        # 5b. v0.4.1 — L5 Procedural Habits (sistem adaptasi)
+        # 5b. v0.4.1/v0.5.0 — L5 Procedural Habits, Worker Blackboard, Inside Joke, Sirkadian & Relasi
         habits = self.memory.match_procedural_habits(
-            user_input, top_k=getattr(config, "HABIT_TOP_K", 2)
+            user_input, top_k=getattr(config, "HABIT_TOP_K", 3)
         )
         if habits:
             result["learned_habits"] = habits
+
+        active_workers = self.memory.list_worker_tasks(limit=5, only_active=True)
+        if active_workers:
+            result["worker_blackboard"] = active_workers
+
+        joke = self.memory.match_inside_joke(user_input)
+        if joke:
+            result["inside_joke_cue"] = joke
+
+        local_hour = current_local_hour()
+        result["circadian"] = {
+            "local_hour": local_hour,
+            "phase": get_circadian_phase(local_hour),
+        }
+        result["relationship"] = {
+            "trust_score": self.heart.state.trust_score,
+            "stage": self.heart.state.relationship_stage,
+        }
 
         # 6. v0.4.0 — konten proaktif (masing-masing MAKSIMAL 1 per perceive).
         texting_style = fast_heuristic_appraisal(user_input).texting_style_detected

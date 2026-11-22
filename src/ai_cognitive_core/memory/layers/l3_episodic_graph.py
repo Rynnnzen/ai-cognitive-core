@@ -4,6 +4,7 @@ import math
 import sqlite3
 from typing import List, Tuple
 import numpy as np
+from ai_cognitive_core import config
 from ai_cognitive_core.schemas import EpisodicNode, PADVector, SomaticTag
 
 EMBED_DIM = 128
@@ -92,6 +93,7 @@ def run_bounded_ppr(
     q_vec = deterministic_embed(query_text)
     q_tokens = _content_tokens(query_text)
     query_is_tech = bool(q_tokens & _TECH_DOMAIN_WORDS)
+    tech_penalty = float(getattr(config, "RECALL_TECH_DOMAIN_PENALTY", 0.65))
 
     nodes: List[EpisodicNode] = []
     vecs: List[np.ndarray] = []
@@ -124,7 +126,7 @@ def run_bounded_ppr(
             overlaps[i] = len(q_tokens & ep_tokens) / max(1, min(len(q_tokens), len(ep_tokens)))
         ep_tech_hits = len(ep_tokens & _TECH_DOMAIN_WORDS)
         if not query_is_tech and ep_tech_hits >= 2 and overlaps[i] < 0.25:
-            domain_mult[i] = 0.45
+            domain_mult[i] = tech_penalty
 
     n = len(nodes)
     adj = np.zeros((n, n), dtype=np.float32)

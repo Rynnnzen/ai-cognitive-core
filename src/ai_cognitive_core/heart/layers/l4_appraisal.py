@@ -179,6 +179,14 @@ def appraisal_to_pad_delta(appraisal: StimulusAppraisal) -> PADVector:
     d_p = 0.50 * appraisal.goal_conduciveness + 0.25 * appraisal.norm_compatibility
     if appraisal.texting_style_detected == "dry_short":
         d_a = -0.18
+    elif appraisal.texting_style_detected == "cold_passive_aggressive":
+        d_a = -0.12
+    elif (
+        appraisal.texting_style_detected == "normal"
+        and abs(appraisal.novelty) < 0.15
+        and abs(appraisal.goal_conduciveness) < 0.20
+    ):
+        d_a = -0.10
     else:
         d_a = 0.40 * abs(appraisal.novelty) + 0.30 * abs(appraisal.goal_conduciveness)
     d_d = 0.45 * (appraisal.coping_potential - 0.5) - (0.25 if "autonomy" in appraisal.threatened_needs else 0.0)

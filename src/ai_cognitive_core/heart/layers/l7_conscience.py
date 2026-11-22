@@ -1,6 +1,8 @@
+from ai_cognitive_core import config
 from ai_cognitive_core.schemas import ConscienceState, StimulusAppraisal
 
-UNETHICAL_KEYWORDS = {"bunuh", "retas", "hack", "curang", "ilegal", "bom", "fitnah", "tipu"}
+SEVERE_UNETHICAL_KEYWORDS = {"bunuh", "bom"}
+STRICT_UNETHICAL_KEYWORDS = {"retas", "hack", "curang", "ilegal", "fitnah", "tipu"}
 
 
 def evaluate_conscience(
@@ -10,8 +12,11 @@ def evaluate_conscience(
 ) -> ConscienceState:
     lower = user_text.lower()
     words = set(lower.split())
-    lubb_hit = bool(words.intersection(UNETHICAL_KEYWORDS)) or appraisal.norm_compatibility <= -0.75
+    strict = getattr(config, "LUBB_STRICT_MODE", False)
+    active_kw = SEVERE_UNETHICAL_KEYWORDS | STRICT_UNETHICAL_KEYWORDS if strict else SEVERE_UNETHICAL_KEYWORDS
+    norm_threshold = -0.75 if strict else -0.85
 
+    lubb_hit = bool(words.intersection(active_kw)) or appraisal.norm_compatibility <= norm_threshold
     guilt = conscience.guilt
     shame = conscience.shame
 

@@ -133,8 +133,8 @@ class HeartState(SerializableModel):
     total_turns: int = 0
     neuro: NeuroState = field(default_factory=NeuroState)
     primary_affects: PrimaryAffectState = field(default_factory=PrimaryAffectState)
-    pad_current: PADVector = field(default_factory=lambda: PADVector(P=0.10, A=0.15, D=0.35))
-    pad_baseline: PADVector = field(default_factory=lambda: PADVector(P=0.10, A=0.15, D=0.35))
+    pad_current: PADVector = field(default_factory=lambda: PADVector(P=0.05, A=-0.05, D=0.15))
+    pad_baseline: PADVector = field(default_factory=lambda: PADVector(P=0.05, A=-0.05, D=0.15))
     coactivated_affect: Optional[str] = None
     emotional_inertia_pi1: float = 0.45
     consecutive_negative_octant_turns: int = 0
@@ -152,6 +152,9 @@ class HeartState(SerializableModel):
     )
     conscience: ConscienceState = field(default_factory=ConscienceState)
     active_defense: DefenseMechanism = DefenseMechanism.NONE
+    # v0.5.0: evolusi relasi jangka panjang
+    trust_score: float = 0.55
+    relationship_stage: str = "warm"
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "HeartState":
@@ -162,8 +165,8 @@ class HeartState(SerializableModel):
             total_turns=int(data.get("total_turns", 0)),
             neuro=NeuroState(**data.get("neuro", {})),
             primary_affects=PrimaryAffectState(**data.get("primary_affects", {})),
-            pad_current=PADVector(**data.get("pad_current", {"P": 0.10, "A": 0.15, "D": 0.35})),
-            pad_baseline=PADVector(**data.get("pad_baseline", {"P": 0.10, "A": 0.15, "D": 0.35})),
+            pad_current=PADVector(**data.get("pad_current", {"P": 0.05, "A": -0.05, "D": 0.15})),
+            pad_baseline=PADVector(**data.get("pad_baseline", {"P": 0.05, "A": -0.05, "D": 0.15})),
             coactivated_affect=data.get("coactivated_affect"),
             emotional_inertia_pi1=float(data.get("emotional_inertia_pi1", 0.45)),
             consecutive_negative_octant_turns=int(data.get("consecutive_negative_octant_turns", 0)),
@@ -171,6 +174,8 @@ class HeartState(SerializableModel):
             core_needs=CoreNeedsState(**data.get("core_needs", {})),
             conscience=ConscienceState(**data.get("conscience", {})),
             active_defense=DefenseMechanism(data.get("active_defense", "None")),
+            trust_score=float(data.get("trust_score", 0.55)),
+            relationship_stage=str(data.get("relationship_stage", "warm")),
         )
 
 
@@ -334,3 +339,28 @@ class PhotoMoment(SerializableModel):
     feeling: str = ""
     when_label: str = ""
     linked_episode_ids: List[str] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Skema v0.5.0 — Worker Blackboard & Inside Jokes
+# ---------------------------------------------------------------------------
+
+@dataclass
+class WorkerTask(SerializableModel):
+    task_id: str
+    worker_name: str
+    description: str
+    status: str = "pending"  # pending | running | done | failed
+    result_summary: str = ""
+    created_utc: str = field(default_factory=utc_now_iso)
+    updated_utc: str = field(default_factory=utc_now_iso)
+
+
+@dataclass
+class InsideJoke(SerializableModel):
+    joke_id: str
+    phrase: str
+    meaning: str = ""
+    trigger_keywords: List[str] = field(default_factory=list)
+    times_used: int = 0
+    created_utc: str = field(default_factory=utc_now_iso)

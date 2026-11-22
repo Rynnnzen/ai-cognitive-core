@@ -98,6 +98,36 @@ _NEW_TABLES: Dict[str, str] = {
             cortisol REAL
         )
     """,
+    "working_memory_chunks": """
+        CREATE TABLE IF NOT EXISTS working_memory_chunks (
+            chunk_id TEXT PRIMARY KEY,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp_utc TEXT NOT NULL,
+            access_count INTEGER DEFAULT 1
+        )
+    """,
+    "worker_tasks": """
+        CREATE TABLE IF NOT EXISTS worker_tasks (
+            task_id TEXT PRIMARY KEY,
+            worker_name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            status TEXT NOT NULL,
+            result_summary TEXT DEFAULT '',
+            created_utc TEXT NOT NULL,
+            updated_utc TEXT NOT NULL
+        )
+    """,
+    "inside_jokes": """
+        CREATE TABLE IF NOT EXISTS inside_jokes (
+            joke_id TEXT PRIMARY KEY,
+            phrase TEXT NOT NULL,
+            meaning TEXT DEFAULT '',
+            trigger_keywords_json TEXT DEFAULT '[]',
+            times_used INTEGER DEFAULT 0,
+            created_utc TEXT NOT NULL
+        )
+    """,
     "schema_meta": """
         CREATE TABLE IF NOT EXISTS schema_meta (
             key TEXT PRIMARY KEY,

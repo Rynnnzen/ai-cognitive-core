@@ -90,6 +90,8 @@ class MemoryManager:
             ).fetchone()
             if row:
                 self._last_node_id = row[0]
+            # v0.5.0: muat working memory persisten dari SQLite
+            self.working.load_from_db(conn2)
         finally:
             conn2.close()
 
@@ -104,6 +106,11 @@ class MemoryManager:
         )
         self.sensory.push(chunk)
         self.working.promote(chunk)
+        conn = self._connect()
+        try:
+            self.working.save_to_db(conn, commit=True)
+        finally:
+            conn.close()
         return chunk
 
     def retrieve_context(self, query_text: str, pad_now: PADVector) -> Tuple[List[EpisodicNode], List[SemanticFact], float]:
@@ -112,7 +119,6 @@ class MemoryManager:
             episodes, ca1_mismatch = run_bounded_ppr(
                 conn, query_text, pad_now, top_k=config.RETRIEVAL_TOP_K_EPISODES
             )
-
             for ep in episodes:
                 conn.execute(
                     "UPDATE episodic_nodes SET stability_status = 'LABILE', access_count = access_count + 1 WHERE node_id = ?",
@@ -384,10 +390,10 @@ class MemoryManager:
             conn.close()
 
     # ------------------------------------------------------------------
-    # v0.4.1 — L5 Procedural Habits (Sistem Adaptasi)
+    # v0.4.1/v0.5.0 — L5 Procedural Habits, Worker Blackboard, Inside Jokes, Heartbeat
     # ------------------------------------------------------------------
 
-    def match_procedural_habits(self, user_input: str, top_k: int = 2) -> list:
+    def match_procedural_habits(self, user_input: str, top_k: int = 3) -> list:
         if not getattr(config, "ENABLE_ADAPTIVE_HABITS", True):
             return []
         conn = self._connect()
@@ -408,5 +414,40 @@ class MemoryManager:
         conn = self._connect()
         try:
             return reinforce_habit(conn, habit_id, delta=delta, commit=True)
+        finally:
+            conn.close()
+
+    def upsert_worker_task(self, **kwargs) -> dict:
+        conn = self._connect()
+        try:
+            return v040_store.upsert_worker_task(conn, **kwargs)
+        finally:
+            conn.close()
+
+    def list_worker_tasks(self, limit: int = 10, only_active: bool = False) -> list:
+        conn = self._connect()
+        try:
+            return v040_store.list_worker_tasks(conn, limit=limit, only_active=only_active)
+        finally:
+            conn.close()
+
+    def add_inside_joke(self, **kwargs) -> dict:
+        conn = self._connect()
+        try:
+            return v040_store.add_inside_joke(conn, **kwargs)
+        finally:
+            conn.close()
+
+    def match_inside_joke(self, user_text: str) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            return v040_store.match_inside_joke(conn, user_text=user_text)
+        finally:
+            conn.close()
+
+    def evaluate_idle_heartbeat(self, **kwargs) -> dict:
+        conn = self._connect()
+        try:
+            return v040_store.evaluate_idle_heartbeat(conn, **kwargs)
         finally:
             conn.close()
