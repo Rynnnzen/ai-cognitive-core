@@ -155,6 +155,13 @@ class HeartState(SerializableModel):
     # v0.5.0: evolusi relasi jangka panjang
     trust_score: float = 0.55
     relationship_stage: str = "warm"
+    # v0.6.0: fondasi ekspansi PAD — PAD sebelumnya, streak kesenangan
+    # tinggi, dan delta PAD terakhir (arah perubahan mood).
+    prev_pad: Optional[PADVector] = None
+    high_pleasure_streak: int = 0
+    last_pad_delta: Dict[str, Any] = field(
+        default_factory=lambda: {"dp": 0.0, "da": 0.0, "dd": 0.0, "direction": "steady"}
+    )
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "HeartState":
@@ -176,6 +183,21 @@ class HeartState(SerializableModel):
             active_defense=DefenseMechanism(data.get("active_defense", "None")),
             trust_score=float(data.get("trust_score", 0.55)),
             relationship_stage=str(data.get("relationship_stage", "warm")),
+            # v0.6.0: default aman — heart_state.json lama tidak punya kunci ini.
+            prev_pad=(
+                PADVector(
+                    P=float(data["prev_pad"].get("P", 0.05)),
+                    A=float(data["prev_pad"].get("A", -0.05)),
+                    D=float(data["prev_pad"].get("D", 0.15)),
+                )
+                if isinstance(data.get("prev_pad"), dict)
+                else None
+            ),
+            high_pleasure_streak=int(data.get("high_pleasure_streak", 0)),
+            last_pad_delta={
+                **{"dp": 0.0, "da": 0.0, "dd": 0.0, "direction": "steady"},
+                **(data.get("last_pad_delta") or {}),
+            },
         )
 
 
@@ -193,6 +215,14 @@ class EmotionalDirective(SerializableModel):
     conscience_override: Optional[str] = None
     tone_instruction: str = ""
     emoji_palette: List[str] = field(default_factory=list)
+    # v0.6.0: fondasi ekspansi PAD — magnitudo, intensitas, nuansa, dan
+    # trayektori PAD (diisi logika engine nanti; default = tenang/stabil).
+    pad_magnitude: float = 0.0
+    mood_intensity: str = "mild"
+    emotional_nuance: str = "Calm"
+    pad_trajectory: Dict[str, Any] = field(
+        default_factory=lambda: {"dp": 0.0, "da": 0.0, "dd": 0.0, "direction": "steady"}
+    )
 
 
 @dataclass

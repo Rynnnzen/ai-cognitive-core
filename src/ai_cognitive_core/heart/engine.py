@@ -20,6 +20,10 @@ from ai_cognitive_core.heart.layers.l1_neurochemical import (
 )
 from ai_cognitive_core.heart.layers.l2_primary_affect import compute_primary_affects
 from ai_cognitive_core.heart.layers.l3_mood_space import (
+    apply_hedonic_elasticity,
+    classify_emotional_nuance,
+    compute_pad_intensity,
+    compute_pad_trajectory,
     decay_pad_over_time,
     detect_coactivation,
     pull_push_update,
@@ -194,12 +198,21 @@ class HeartEngine:
             pad_delta.D -= 0.15
         pad_delta = pad_delta.clamp()
 
+        # v0.6.0: simpan PAD sebelum update untuk trayektori.
+        prev_pad = self.state.pad_current
         self.state.pad_current = pull_push_update(
             self.state.pad_current,
             self.state.pad_baseline,
             pad_delta,
             inertia_pi1=self.state.emotional_inertia_pi1,
         )
+        # v0.6.0: elastisitas hedonik + jejak PAD (streak, prev, delta).
+        if getattr(config, "ENABLE_PAD_EXPANSION", True):
+            self.state.pad_current, self.state.high_pleasure_streak = apply_hedonic_elasticity(
+                self.state.pad_current, self.state.pad_baseline, self.state.high_pleasure_streak
+            )
+            self.state.prev_pad = prev_pad
+            self.state.last_pad_delta = compute_pad_trajectory(prev_pad, self.state.pad_current)
         dominant_affect, secondary_affect = detect_coactivation(self.state.primary_affects)
         self.state.coactivated_affect = secondary_affect
 
@@ -285,12 +298,30 @@ class HeartEngine:
         emoji_palette = phrase_bank.select_emoji_palette(octant, bubble_style, seed_material)
         self.last_phrase_seed = phrase_seed
 
+        # v0.6.0: ekspansi PAD — magnitudo, intensitas, nuansa, trayektori.
+        pad_expansion = getattr(config, "ENABLE_PAD_EXPANSION", True)
+        pad_magnitude, mood_intensity = 0.0, "mild"
+        emotional_nuance = "Calm"
+        pad_trajectory = {"dp": 0.0, "da": 0.0, "dd": 0.0, "direction": "steady"}
+        if pad_expansion:
+            pad_magnitude, mood_intensity = compute_pad_intensity(self.state.pad_current)
+            _lh = current_local_hour() if getattr(config, "ENABLE_CIRCADIAN_RHYTHM", True) else None
+            circadian_phase = get_circadian_phase(_lh) if _lh is not None else "daytime"
+            emotional_nuance = classify_emotional_nuance(
+                self.state.pad_current, mood_intensity, dominant_affect, eng, circadian_phase
+            )
+            pad_trajectory = compute_pad_trajectory(self.state.prev_pad, self.state.pad_current)
+
         tone_parts = [
             f"Mood={octant} (P={p_val:.2f}, A={a_val:.2f}, D={self.state.pad_current.D:.2f})",
             f"Energy={eng:.2f}",
             f"DominantCircuit={dominant_affect}",
             f"BubbleChatRule={bubble_desc}",
         ]
+        if pad_expansion:
+            tone_parts.append(f"Nuance={emotional_nuance}")
+            if pad_trajectory.get("direction") != "steady":
+                tone_parts.append(f"Trajectory={pad_trajectory['direction']}")
         if secondary_affect:
             tone_parts.append(f"CoactivatedWith={secondary_affect}")
         if self.state.active_defense != DefenseMechanism.NONE:
@@ -316,6 +347,10 @@ class HeartEngine:
             conscience_override=self.state.conscience.lubb_reason,
             tone_instruction="; ".join(tone_parts),
             emoji_palette=emoji_palette,
+            pad_magnitude=pad_magnitude,
+            mood_intensity=mood_intensity,
+            emotional_nuance=emotional_nuance,
+            pad_trajectory=pad_trajectory,
         )
 
     def apply_worker_outcome(self, status: str) -> None:

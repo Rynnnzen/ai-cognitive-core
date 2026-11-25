@@ -164,3 +164,18 @@ TRUST_STAGE_WARM = 0.40
 # Batas inersia emosi untuk pemulihan bertahap (temuan audit M13).
 INERTIA_BASELINE_PI1 = 0.35
 INERTIA_RECOVERY_STEP = 0.02
+
+# ---------------------------------------------------------------------------
+# Parameter v0.6.0 — Fondasi ekspansi PAD (4 ekspansi)
+# Hanya parameter + field skema; logika engine belum memakai nilai ini.
+# Semua default aman; heart_state.json lama tetap terbaca (tanpa migrasi).
+# ---------------------------------------------------------------------------
+ENABLE_PAD_EXPANSION = True
+PAD_INTENSITY_MILD_MAX = 0.35
+PAD_INTENSITY_MODERATE_MAX = 0.75
+PAD_TRAJECTORY_DEADBAND = 0.06
+PAD_HEDONIC_PLEASURE_THRESHOLD = 0.75
+PAD_HEDONIC_STREAK_TRIGGER = 3
+PAD_HEDONIC_ELASTIC_PULL = 0.08
+NEURO_SATURATION_THRESHOLD = 0.88
+NEURO_SATURATION_DAMPING = 0.35

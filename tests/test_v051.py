@@ -359,7 +359,7 @@ class TestV051AuditFixes(unittest.TestCase):
 
     # --- M14: versi ---------------------------------------------------------
     def test_version_bump(self):
-        self.assertEqual(__version__, "0.5.1")
+        self.assertEqual(__version__, "0.6.0")
 
 
 class TestV051MCPTools(unittest.TestCase):
@@ -383,7 +383,7 @@ class TestV051MCPTools(unittest.TestCase):
         self.assertFalse(ds["connected"])
         self.assertIsNotNone(ds["last_init_error"])
         self.assertIn("warning", ds)
-        self.assertEqual(st["v050"]["core_version"], "0.5.1")
+        self.assertEqual(st["v050"]["core_version"], "0.6.0")
 
     def test_p5_none_defaults_keep_calibration(self):
         ms = self.ms

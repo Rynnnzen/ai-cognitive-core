@@ -872,18 +872,31 @@ def upsert_worker_task(
 
     if task_id:
         row = conn.execute(
-            "SELECT task_id, description FROM worker_tasks WHERE task_id = ?",
+            "SELECT task_id, description, status, result_summary FROM worker_tasks WHERE task_id = ?",
             (task_id,),
         ).fetchone()
         if row:
             desc_val = (description or "").strip() or row[1]
+            new_summary = (result_summary or "")[:400]
+            # v0.6.0 (M11): reset penanda alert saat tugas berubah — status
+            # berubah, kembali pending/running, atau ada result_summary baru —
+            # supaya heartbeat melaporkannya lagi (bukan diam selamanya).
+            if (
+                status != row[2]
+                or status in ("pending", "running")
+                or (bool(new_summary) and new_summary != (row[3] or ""))
+            ):
+                conn.execute(
+                    "UPDATE worker_tasks SET alerted_utc = '' WHERE task_id = ?",
+                    (task_id,),
+                )
             conn.execute(
                 """
                 UPDATE worker_tasks
                 SET worker_name = ?, description = ?, status = ?, result_summary = ?, updated_utc = ?
                 WHERE task_id = ?
                 """,
-                (worker_name[:80], desc_val[:300], status, (result_summary or "")[:400], now_iso, task_id),
+                (worker_name[:80], desc_val[:300], status, new_summary, now_iso, task_id),
             )
             _maybe_commit(conn, commit)
             return {"stored": True, "task_id": task_id, "status": status, "action": "updated"}
@@ -1114,6 +1127,14 @@ def evaluate_idle_heartbeat(
         if last and (now - last) < timedelta(minutes=config.REMINDER_COOLDOWN_MINUTES):
             continue
         if _trigger_due(trigger, due_at, "", now):
+            # v0.6.0 (M11): langsung tandai surfaced + commit supaya
+            # cooldown REMINDER_COOLDOWN_MINUTES aktif dan alert yang sama
+            # tidak muncul terus-terusan di setiap cek status.
+            conn.execute(
+                "UPDATE reminder_intents SET status = 'surfaced', last_surfaced_at = ? WHERE intent_id = ?",
+                (now.isoformat(), iid),
+            )
+            _maybe_commit(conn, True)
             return {
                 "should_initiate": True,
                 "reason": "due_reminder",
@@ -1156,6 +1177,12 @@ def evaluate_idle_heartbeat(
         "SELECT dream_id, theme, COALESCE(dream_story, ''), idea_text FROM dream_records WHERE status = 'stored' ORDER BY created_at ASC LIMIT 1"
     ).fetchone()
     if dream:
+        # v0.6.0 (M11): langsung tandai surfaced + commit supaya mimpi
+        # yang sama tidak muncul berulang kali di setiap cek status.
+        conn.execute(
+            "UPDATE dream_records SET status = 'surfaced' WHERE dream_id = ?", (dream[0],)
+        )
+        _maybe_commit(conn, True)
         return {
             "should_initiate": True,
             "reason": "share_dream",
@@ -1172,6 +1199,18 @@ def evaluate_idle_heartbeat(
         "SELECT question_id, text, topic FROM curiosity_questions WHERE status = 'pending' ORDER BY priority DESC, created_at ASC LIMIT 1"
     ).fetchone()
     if curiosity:
+        # v0.6.0 (M11): hormati cooldown CURIOSITY_COOLDOWN_MINUTES dari
+        # last_curiosity_offered_at, lalu tandai pertanyaan ini sudah
+        # ditawarkan supaya tidak muncul terus-terusan.
+        last_offered = _parse_iso(get_meta(conn, "last_curiosity_offered_at"))
+        if last_offered and (now - last_offered) < timedelta(minutes=config.CURIOSITY_COOLDOWN_MINUTES):
+            return {"should_initiate": False, "reason": "nothing_pending", "local_hour": local_hour}
+        conn.execute(
+            "UPDATE curiosity_questions SET last_offered_at = ? WHERE question_id = ?",
+            (now.isoformat(), curiosity[0]),
+        )
+        set_meta(conn, "last_curiosity_offered_at", now.isoformat(), commit=False)
+        _maybe_commit(conn, True)
         return {
             "should_initiate": True,
             "reason": "curiosity_checkin",

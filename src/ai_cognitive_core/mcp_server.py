@@ -6,7 +6,12 @@ from ai_cognitive_core import __version__, config
 from ai_cognitive_core.drive_bridge import DriveSyncBridge
 from ai_cognitive_core.heart.engine import HeartEngine
 from ai_cognitive_core.heart.layers.l1_neurochemical import current_local_hour, get_circadian_phase
-from ai_cognitive_core.heart.layers.l3_mood_space import detect_coactivation
+from ai_cognitive_core.heart.layers.l3_mood_space import (
+    classify_emotional_nuance,
+    compute_pad_intensity,
+    compute_pad_trajectory,
+    detect_coactivation,
+)
 from ai_cognitive_core.heart import phrase_bank
 from ai_cognitive_core.memory.manager import MemoryManager
 from ai_cognitive_core.memory.consolidation import run_sleep_consolidation
@@ -296,6 +301,10 @@ def cognitive_commit_turn(
             "current_energy": heart.state.neuro.energy,
             "mood_octant": directive.mood_octant,
             "bubble_style": directive.bubble_style,
+            # v0.6.0: ekspansi PAD ikut dikembalikan di commit_turn.
+            "mood_intensity": directive.mood_intensity,
+            "emotional_nuance": directive.emotional_nuance,
+            "pad_trajectory": directive.pad_trajectory,
             "gdrive_synced": synced,
             "gdrive_db_included": push_db,
             "v040_outcomes": bundle.get("outcomes", {}),
@@ -396,6 +405,29 @@ def cognitive_get_status() -> str:
             is_resting=heart.state.is_resting,
             local_hour=local_hour,
         ),
+    }
+    # v0.6.0: blok ekspansi PAD — magnitudo, intensitas, nuansa, trayektori, streak.
+    if getattr(config, "ENABLE_PAD_EXPANSION", True):
+        _mag, _intensity = compute_pad_intensity(heart.state.pad_current)
+        _dom, _sec = detect_coactivation(heart.state.primary_affects)
+        _nuance = classify_emotional_nuance(
+            heart.state.pad_current, _intensity, _dom,
+            heart.state.neuro.energy, get_circadian_phase(local_hour),
+        )
+        _trajectory = compute_pad_trajectory(heart.state.prev_pad, heart.state.pad_current)
+    else:
+        _mag, _intensity = 0.0, "mild"
+        _nuance = "Calm"
+        _trajectory = {"dp": 0.0, "da": 0.0, "dd": 0.0, "direction": "steady"}
+    snapshot["v060"] = {
+        "core_version": __version__,
+        "pad_expansion": {
+            "pad_magnitude": _mag,
+            "mood_intensity": _intensity,
+            "emotional_nuance": _nuance,
+            "pad_trajectory": _trajectory,
+            "high_pleasure_streak": heart.state.high_pleasure_streak,
+        },
     }
     return json.dumps(snapshot, ensure_ascii=False, indent=2)
 

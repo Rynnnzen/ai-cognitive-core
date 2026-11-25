@@ -1,5 +1,24 @@
 # Changelog — ai_cognitive_core
 
+## [0.6.0] - 2026-11-25
+
+Release **v0.6.0** — anti-repeat heartbeat alerts (M11) + 4 PAD expansions. Keeps the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the old `heart_state.json` (all new fields have safe defaults, no migration).
+
+### Anti-Repeat Heartbeat Alert (M11) (`memory/v040_store.py`)
+- `evaluate_idle_heartbeat` now marks `due_reminder` and `share_dream` as `surfaced` + commits as soon as they fire, so the `REMINDER_COOLDOWN_MINUTES` cooldown kicks in and the same alert no longer repeats on every status check.
+- `curiosity_checkin` now honours the `CURIOSITY_COOLDOWN_MINUTES` cooldown from `last_curiosity_offered_at` and marks the offered question (`last_offered_at` + meta).
+- `upsert_worker_task` resets `alerted_utc` when the status changes, returns to `pending`/`running`, or a new `result_summary` arrives — so a changed task is reported again.
+
+### 4 PAD Expansions (`config.py`, `schemas.py`, `heart/layers/l1_neurochemical.py`, `heart/layers/l3_mood_space.py`, `heart/engine.py`, `mcp_server.py`)
+1. **Mood intensity (`l3_mood_space.py`, `engine.py`):** `compute_pad_intensity` — Euclidean PAD magnitude + `mild` / `moderate` / `intense` label (thresholds `0.35` / `0.75`); feeds `EmotionalDirective.pad_magnitude` / `mood_intensity` and `tone_instruction`.
+2. **Mood trajectory (`l3_mood_space.py`, `engine.py`):** `compute_pad_trajectory` — `dp`/`da`/`dd` deltas + direction `steady` / `softening` / `warming_up` / `escalating` / `calming_down` / `cooling_down` (deadband `0.06`); `step()` stores `prev_pad` and `last_pad_delta`; `tone_instruction` includes `Trajectory=...` when not `steady`.
+3. **Hedonic elasticity (`l3_mood_space.py`, `engine.py`):** `apply_hedonic_elasticity` — when `P > 0.75` for 3 turns in a row, `P` is pulled toward the baseline by `0.08` (never below the baseline); `high_pleasure_streak` is stored in state.
+4. **Emotional nuance (`l3_mood_space.py`, `engine.py`):** `classify_emotional_nuance` — 22 fine sub-emotions (`Drowsy` first when energy `< 0.32` or `late_night` + `A < -0.15`; then per-octant derivatives); feeds `EmotionalDirective.emotional_nuance` and `tone_instruction` as `Nuance=...`.
+- **Neuro saturation damping (`l1_neurochemical.py`):** `_damp_high_positive` damps `oxytocin` / `dopamine` / `serotonin` increases by `0.35x` once the value is `>= 0.88` (decreases are not damped).
+- **MCP output (`mcp_server.py`):** `cognitive_commit_turn` also returns `mood_intensity`, `emotional_nuance`, `pad_trajectory`; `cognitive_get_status` adds the `v060` block (`core_version`, `pad_expansion`).
+- **Master switch:** `ENABLE_PAD_EXPANSION = True` in `config.py` turns the whole expansion on/off at once.
+- **Tests:** new `tests/test_v060.py` (19 tests — 8 anti-repeat heartbeat, 5 PAD functions + damping, 4 old-state compatibility, 2 `v060`/commit fields); full suite 77/77 passing.
+
 ## [0.5.1] - 2026-11-23
 
 Audit-fix release **v0.5.1** — in-place fixes for all 5 Important findings (P1–P5) and 15 Minor findings (M1–M6, M8, M10–M17; M7 and M9 intentionally deferred) of the full v0.5.0 audit (2026-11-23), keeping the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the `v0.4.0` SQLite database. No schema version bump: the one new column is additive and idempotent.

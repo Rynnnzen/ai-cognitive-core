@@ -83,6 +83,22 @@ def apply_time_decay(
     return NeuroState(**data)
 
 
+def _damp_high_positive(current: float, delta: float) -> float:
+    """v0.6.0: redam kenaikan hormon saat sudah jenuh.
+
+    Jika ENABLE_PAD_EXPANSION aktif, nilai hormon sudah mencapai
+    NEURO_SATURATION_THRESHOLD (0.88), dan delta positif, hanya sebagian
+    (NEURO_SATURATION_DAMPING = 0.35) dari kenaikan yang diterapkan —
+    mencegah hormon mentok di 1.0 terlalu cepat. Penurunan (delta <= 0)
+    dan nilai di bawah ambang tidak diredam.
+    """
+    if not getattr(config, "ENABLE_PAD_EXPANSION", True):
+        return delta
+    if delta > 0 and current >= float(getattr(config, "NEURO_SATURATION_THRESHOLD", 0.88)):
+        return delta * float(getattr(config, "NEURO_SATURATION_DAMPING", 0.35))
+    return delta
+
+
 def update_neurochemistry(
     neuro: NeuroState,
     appraisal: StimulusAppraisal,
@@ -104,13 +120,17 @@ def update_neurochemistry(
     cortisol = min(1.0, max(0.0, raw_cort + damping * (base.cortisol - raw_cort)))
 
     oxy_delta = 0.10 if ("safety" in appraisal.fulfilled_needs or appraisal.goal_conduciveness > 0.3) else -0.05 * stress_impulse
-    raw_oxy = neuro.oxytocin + oxy_delta
+    # v0.6.0: redam kenaikan oksitosin saat sudah jenuh (>= 0.88).
+    raw_oxy = neuro.oxytocin + _damp_high_positive(neuro.oxytocin, oxy_delta)
     oxytocin = min(1.0, max(0.0, raw_oxy + damping * (base.oxytocin - raw_oxy)))
 
-    raw_dop = neuro.dopamine + 0.18 * reward_impulse - 0.12 * stress_impulse
+    # v0.6.0: hanya komponen kenaikan (reward) yang diredam saat jenuh;
+    # penurunan oleh stres tetap penuh.
+    raw_dop = neuro.dopamine + _damp_high_positive(neuro.dopamine, 0.18 * reward_impulse) - 0.12 * stress_impulse
     dopamine = min(1.0, max(0.0, raw_dop + damping * (base.dopamine - raw_dop)))
 
-    raw_ser = neuro.serotonin + 0.09 * appraisal.norm_compatibility - 0.12 * stress_impulse
+    # v0.6.0: sama seperti dopamin — redam hanya komponen kenaikannya.
+    raw_ser = neuro.serotonin + _damp_high_positive(neuro.serotonin, 0.09 * appraisal.norm_compatibility) - 0.12 * stress_impulse
     serotonin = min(1.0, max(0.0, raw_ser + damping * (base.serotonin - raw_ser)))
 
     raw_nor = neuro.noradrenaline + 0.22 * abs(appraisal.novelty) + 0.15 * stress_impulse
