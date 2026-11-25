@@ -2,7 +2,7 @@
 
 Hybrid cognitive architecture **Deterministic + LLM (17 Layers)** — Heart + Conscious + Memory — as an MCP server, with cross-device state synchronization via Google Drive API v3.
 
-This snapshot is **v0.5.0 (branch `main`)** — a full expansion release on top of v0.4.1. For the per-version release notes, see [GitHub Releases](https://github.com/Rynnnzen/ai-cognitive-core/releases) and `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
+This snapshot is **v0.6.0 (branch `main`)** — anti-repeat heartbeat alerts + 4 PAD expansions on top of v0.5.1. For the per-version release notes, see [GitHub Releases](https://github.com/Rynnnzen/ai-cognitive-core/releases) and `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
 
 <img src="assets/agent-crayon.webp" alt="Agent, the module's mascot" width="240">
 
@@ -65,9 +65,9 @@ Three systems running together on every conversation turn:
 
 The emotion engine that sets the mood, energy, and reply tone.
 
-- L1 Neurochemical — "body chemistry": 6 variables (`energy`, `cortisol`, `oxytocin`, `dopamine`, `serotonin`, `noradrenaline`) decaying and recovering on real time. Resting refills energy exponentially (τ = 40 min toward 0.92, after a +0.08 micro-nap); idle refills slower (τ = 2h toward 0.85). **Circadian rhythm (v0.5.0):** a local clock (default WIB / UTC+7) with 4 phases — `morning` (05–10), `daytime` (11–17), `evening` (18–22), `late_night` (23–04). Late night raises energy drain 1.30× and lowers arousal (−0.08); morning gives a 1.15× sleep-recovery bonus.
+- L1 Neurochemical — "body chemistry": 6 variables (`energy`, `cortisol`, `oxytocin`, `dopamine`, `serotonin`, `noradrenaline`) decaying and recovering on real time. Resting refills energy exponentially (τ = 40 min toward 0.92, after a +0.08 micro-nap); idle refills slower (τ = 2h toward 0.85). **Circadian rhythm (v0.5.0):** a local clock (default WIB / UTC+7) with 4 phases — `morning` (05–10), `daytime` (11–17), `evening` (18–22), `late_night` (23–04). Late night raises energy drain 1.30× and lowers arousal (−0.08); morning gives a 1.15× sleep-recovery bonus. **Neuro saturation damping (v0.6.0):** positive `oxytocin` / `dopamine` / `serotonin` increases are damped `0.35×` once the value is `>= 0.88`, so hormones don't slam into 1.0 too fast (decreases are not damped).
 - L2 Primary Affect — 7 Panksepp circuits (`SEEKING`, `CARE`, `PLAY`, `LUST`, `FEAR`, `RAGE`, `PANIC_GRIEF`) with mixed-emotion co-activation detection.
-- L3 Mood Space — PAD Pull-Push Engine (`P`, `A`, `D`) mapping 8 mood octants (`Exuberant`, `Dependent`, `Relaxed`, `Docile`, `Hostile`, `Anxious`, `Disdainful`, `Bored/Depressed`) plus emotional inertia. Default baseline is `Relaxed` (`P=0.05, A=-0.05, D=0.15`). Low energy (`< 0.45`) pulls arousal down; negative L2 circuits pull pleasure and dominance down.
+- L3 Mood Space — PAD Pull-Push Engine (`P`, `A`, `D`) mapping 8 mood octants (`Exuberant`, `Dependent`, `Relaxed`, `Docile`, `Hostile`, `Anxious`, `Disdainful`, `Bored/Depressed`) plus emotional inertia. Default baseline is `Relaxed` (`P=0.05, A=-0.05, D=0.15`). Low energy (`< 0.45`) pulls arousal down; negative L2 circuits pull pleasure and dominance down. **PAD expansion (v0.6.0):** `compute_pad_intensity` (Euclidean magnitude + `mild` / `moderate` / `intense`), `compute_pad_trajectory` (`dp`/`da`/`dd` + direction `steady` / `softening` / `warming_up` / `escalating` / `calming_down` / `cooling_down`), `classify_emotional_nuance` (22 fine sub-emotions, `Drowsy` first when energy `< 0.32` or `late_night` + `A < -0.15`), and `apply_hedonic_elasticity` (pulls `P` back toward baseline by `0.08` after 3 turns above `0.75`) — all exposed in `EmotionalDirective` (`pad_magnitude`, `mood_intensity`, `emotional_nuance`, `pad_trajectory`) and the `v060` block of `cognitive_get_status`.
 - L4 Appraisal — fast heuristic SEC extraction (<2ms), sensitive to texting micro-cues (`dry_short`, `cold_passive_aggressive`, `shouting_caps`, `expressive_affectionate`) and reply latency (≤45s vs ≥6h). Arousal can go negative on calm/neutral chat (−0.10), passive-aggressive text (−0.12), and `dry_short` (−0.18).
 - L5 Defense — 4 defense mechanisms (`None`, `Humor`, `Suppression`, `DetachedProtector`).
 - L6 Relational — 7 core needs (`safety`, `autonomy`, `expression`, `playfulness`, `boundaries`, `coherence`, `fairness`) and 3 attachment styles (`Secure`, `Anxious`, `Avoidant`). **Relationship evolution (v0.5.0):** a `trust_score` (0.0–1.0) and `relationship_stage` (`guarded` / `warm` / `close` / `deep_bond`) that evolve gradually with interaction quality.
@@ -97,7 +97,7 @@ Layered memory on SQLite, from fleeting impressions to settled knowledge.
 - L4 Semantic Schema — semantic facts with provenance (`source`, `inference_status`): lessons abstracted from episodes during sleep.
 - L5 Procedural Habits — procedural habits formed from repeated patterns. **Adaptation system (v0.4.1/v0.5.0, inspired by `amirhouieh/adapt`, Voyager, Reflexion):** `match_habits` (token overlap weighted by `success_count`, top 3, min score −1), `learn_habit` (upsert/evolve rules), and `reinforce_habit` (+1/−1).
 
-Supporting Memory: `v040_store.py` holds curiosity (5-minute cooldown, 1-turn gap, max 1 per perceive), reminders (`due_at` / `keyword:`, schedule-based), and rich photo moments (`caption`, `people`, `place`, `feeling`, `when_label`, `event_tags` — referenced only when `consent_status == "granted"`), plus the v0.5.0 additions: the **worker blackboard** (`worker_tasks` table), **inside jokes** (`inside_jokes` table, auto-detected via `match_inside_joke` → `inside_joke_cue`), and the **idle heartbeat** (`evaluate_idle_heartbeat`, quiet hours 23:00–06:59). `dreams.py` composes the dream narrative first (`dream_story`), then the idea — dreams are never promoted to `semantic_facts`. `consolidation.py` runs SWR replay, Ebbinghaus pruning, 40 dream candidates (min importance 0.35), and an expired-reminder sweep. `migration.py` is idempotent and additive (new tables: `curiosity_questions`, `reminder_intents`, `dream_records`, `photo_moments`, `turn_markers`, `energy_telemetry`, `working_memory_chunks`, `worker_tasks`, `inside_jokes`, `schema_meta`).
+Supporting Memory: `v040_store.py` holds curiosity (5-minute cooldown, 1-turn gap, max 1 per perceive), reminders (`due_at` / `keyword:`, schedule-based), and rich photo moments (`caption`, `people`, `place`, `feeling`, `when_label`, `event_tags` — referenced only when `consent_status == "granted"`), plus the v0.5.0 additions: the **worker blackboard** (`worker_tasks` table), **inside jokes** (`inside_jokes` table, auto-detected via `match_inside_joke` → `inside_joke_cue`), and the **idle heartbeat** (`evaluate_idle_heartbeat`, quiet hours 23:00–06:59). **Anti-repeat heartbeat alerts (v0.6.0):** fired reminders and dreams are marked `surfaced` immediately, curiosity honours its 5-minute cooldown, and worker tasks re-alert when their status changes or a new `result_summary` arrives — so no alert repeats on every status check. `dreams.py` composes the dream narrative first (`dream_story`), then the idea — dreams are never promoted to `semantic_facts`. `consolidation.py` runs SWR replay, Ebbinghaus pruning, 40 dream candidates (min importance 0.35), and an expired-reminder sweep. `migration.py` is idempotent and additive (new tables: `curiosity_questions`, `reminder_intents`, `dream_records`, `photo_moments`, `turn_markers`, `energy_telemetry`, `working_memory_chunks`, `worker_tasks`, `inside_jokes`, `schema_meta`).
 
 ## Examples / Showcase
 
@@ -234,11 +234,13 @@ ai-cognitive-core/
 ├── README.md               — this document
 ├── LICENSE                 — MIT License
 ├── PATCH_NOTES.md          — patch history (v0.4.0, Indonesian)
-├── CHANGELOG.md            — changelog (v0.5.0)
+├── CHANGELOG.md            — changelog (v0.6.0)
 ├── pyproject.toml          — package metadata + dependencies
-├── tests/                  — test suite v0.5.0 (35 tests)
+├── tests/                  — test suite v0.6.0 (77 tests)
 │   ├── test_v040.py
-│   └── test_v050.py
+│   ├── test_v050.py
+│   ├── test_v051.py
+│   └── test_v060.py
 ├── assets/                 — README images
 │   ├── arsitektur-17-layer.webp
 │   ├── agent-crayon.webp
@@ -254,7 +256,7 @@ ai-cognitive-core/
         ├── mcp_server.py       — FastMCP server + 5 tools
         ├── drive_bridge.py     — Google Drive sync (OAuth)
         ├── schemas.py          — shared data schemas
-        ├── config.py           — v0.5.0 parameters in one place
+        ├── config.py           — v0.6.0 parameters in one place
         ├── conscious/
         │   ├── cycle.py        — cognitive cycle orchestrator
         │   ├── schemas.py
@@ -268,7 +270,7 @@ ai-cognitive-core/
             ├── manager.py      — SQLite memory manager
             ├── consolidation.py — sleep consolidation (SWR + pruning)
             ├── migration.py    — schema migration, idempotent & additive
-            ├── v040_store.py   — v0.4.0–v0.5.0 feature storage
+            ├── v040_store.py   — v0.4.0–v0.6.0 feature storage
             ├── dreams.py       — dream composer
             ├── schemas.py
             └── layers/         — l1_sensory_buffer to l5_procedural_habits
