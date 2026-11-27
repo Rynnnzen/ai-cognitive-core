@@ -179,3 +179,39 @@ PAD_HEDONIC_STREAK_TRIGGER = 3
 PAD_HEDONIC_ELASTIC_PULL = 0.08
 NEURO_SATURATION_THRESHOLD = 0.88
 NEURO_SATURATION_DAMPING = 0.35
+
+# ---------------------------------------------------------------------------
+# Parameter v0.6.1 — Aturan seleksi backup foto/media Google Drive
+# Foto harian/umum TIDAK ikut backup otomatis ke Drive (photos/).
+# Hanya dua kategori yang boleh di-backup:
+#   a) character sheet & aset referensi gaya visual utama (ref_keep/),
+#      saat ada perubahan model atau art style;
+#   b) foto momen yang benar-benar berkesan — ditandai favorit/milestone/
+#      penting, atau disimpan di subfolder khusus (memorable/ atau
+#      favorites/) di dalam folder sumbernya.
+# Aturan ini ditegakkan oleh skrip backup foto (tooling sisi agen, bukan
+# bagian paket) yang mengimpor konstanta di bawah ini.
+# Foto kiriman user (media_library/) tetap TIDAK pernah di-backup.
+# ---------------------------------------------------------------------------
+ENABLE_DRIVE_PHOTOS_SYNC = True
+# Subfolder lokal (relatif terhadap workspace) berisi character sheet &
+# aset referensi gaya visual utama.
+DRIVE_PHOTOS_CHARACTER_SHEET_DIR = "ref_keep"
+# Subfolder khusus di dalam tiap folder sumber foto yang menandai momen
+# berkesan (difavoritkan / milestone / penting).
+DRIVE_PHOTOS_MEMORABLE_SUBDIRS = ("memorable", "favorites")
+# Folder kandidat avatar — aset identitas visual, ikut di-backup.
+DRIVE_PHOTOS_AVATAR_DIR = "avatars"
+# Folder sumber foto harian yang TIDAK di-backup massal (hanya subfolder
+# memorable/favorites di dalamnya yang ikut).
+DRIVE_PHOTOS_DAILY_SOURCE_DIR = "imagine_media"
+
+# ---------------------------------------------------------------------------
+# Parameter v0.6.1 — Dashboard web ringan (pengganti Obsidian)
+# Endpoint FastAPI di dashboard/; UI statis di dashboard/static/.
+# Dashboard bersifat lokal saja (bind 127.0.0.1, tanpa auth) — jangan
+# diekspos ke publik. Port bisa diubah lewat COGNITIVE_DASHBOARD_PORT.
+# ---------------------------------------------------------------------------
+ENABLE_DASHBOARD = True
+DASHBOARD_DEFAULT_PORT = 8000
+DASHBOARD_GRAPH_LIMIT = 200

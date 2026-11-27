@@ -1,5 +1,21 @@
 # Changelog — ai_cognitive_core
 
+## [0.6.1] - 2026-11-28
+
+Rilis **v0.6.1** — dashboard web ringan (pengganti Obsidian) + aturan seleksi backup foto/media Drive. Tetap mempertahankan arsitektur 3 pilar (`memory`, `heart`, `conscious`), kontrak 5 tool MCP, dan kompatibilitas penuh dengan `heart_state.json` dan database yang sudah ada (tanpa migrasi).
+
+### Dashboard Web Ringan (`src/ai_cognitive_core/dashboard/`)
+- **Helper aman (`dashboard/helpers.py`):** baca read-only untuk `heart_state.json` dan `cognitive_memory.db` (SQLite dibuka `mode=ro`, tidak pernah ditulis), serta baca-tulis terarah ke folder Markdown memori dengan validasi path ketat (menolak path absolut, `..`, dan path di luar direktori memori yang diizinkan). Path dikonfigurasi lewat environment variable (`COGNITIVE_STATE_DIR`, `COGNITIVE_WORKSPACE_DIR`) dengan default aman — tanpa hardcode path lokal tertentu.
+- **Info sinkronisasi Drive terakhir:** dibaca dari `sync_meta.json` beserta selisih waktunya (`ago_seconds` + `ago_human` berbahasa Indonesia).
+- **Endpoint FastAPI (`dashboard/app.py`):** `GET /` (menyajikan UI statis), `GET /api/status` (kondisi kognitif + PAD expansion + sinkronisasi Drive), `GET /api/graph` (episode & entitas), `GET /api/memories` (daftar file Markdown), `GET /api/memory?path=...` (baca satu file), `PUT /api/memory` (tulis satu file, validasi path ketat). Dashboard bersifat lokal saja (bind `127.0.0.1`, tanpa auth) — jangan diekspos ke publik.
+- **UI Colorful Crayon + PWA (`dashboard/static/`):** antarmuka responsif mobile-first, latar kertas krem hangat (`#FFFDF7` / `#FAF3E3`), aksen krayon warna-warni, `manifest.json` untuk Add to Home Screen. Status Bar kondisi kognitif (PAD expansion, 5 bar neurochemical, energi, fase sirkadian, heartbeat, badge sinkronisasi Drive), Interactive Memory Graph (`vis-network`, warna node per emosi, ukuran per bobot memori, panel detail saat diklik), serta Markdown Memory Reader & Editor.
+- **Dependensi baru:** `fastapi`, `uvicorn` (ditambahkan ke `pyproject.toml`).
+- **Tes:** suite baru `tests/test_v061_dashboard.py`.
+
+### Aturan Seleksi Backup Foto/Media Drive (`config.py`, `drive_bridge.py`, `backup_photos_to_mcp_drive.py`)
+- Foto harian/umum **tidak** ikut backup otomatis ke Drive (`photos/`). Hanya: (a) character sheet & aset referensi gaya visual utama (`ref_keep/`) saat ada perubahan model/art style; (b) foto momen berkesan di subfolder khusus `memorable/` atau `favorites/`; (c) kandidat avatar (`avatars/`). Aturan dicatat di `config.py` (`DRIVE_PHOTOS_*`) dan ditegakkan oleh skrip backup.
+- **Rapikan `workspace_md/` (`drive_bridge.py`):** file goal yang tinggal di `workspace/goals/` kini dipetakan ke `goals/` (awalan `workspace/` dibuang) supaya Drive tidak punya subfolder `workspace/` yang mengulang `goals/`; folder duplikat lama di Drive sudah dihapus (isinya tersimpan lokal dan akan re-sync sekali ke lokasi baru).
+
 ## [0.6.0] - 2026-11-25
 
 Release **v0.6.0** — anti-repeat heartbeat alerts (M11) + 4 PAD expansions. Keeps the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the old `heart_state.json` (all new fields have safe defaults, no migration).

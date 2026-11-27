@@ -367,6 +367,20 @@ class DriveSyncBridge:
 
         return _do_upload()
 
+    @staticmethod
+    def _drive_rel_parts(md_file: Path, ws_path: Path) -> Tuple[str, ...]:
+        """Bagian path relatif untuk kunci hash & struktur folder Drive.
+
+        v0.6.1: rapikan duplikasi workspace_md/ — file goal yang tinggal di
+        ``workspace/goals/<goal>/`` dipetakan ke ``goals/<goal>/`` (awalan
+        ``workspace/`` dibuang), supaya Drive tidak punya subfolder
+        ``workspace/`` yang mengulang ``goals/``. File lain tidak berubah.
+        """
+        parts = md_file.relative_to(ws_path).parts
+        if len(parts) >= 2 and parts[0] == "workspace" and parts[1] == "goals":
+            return parts[1:]
+        return parts
+
     def sync_workspace_markdown(
         self,
         workspace_dir: Optional[str] = None,
@@ -445,7 +459,10 @@ class DriveSyncBridge:
                             md_files.extend(sorted(goal_dir.glob("*.md")))
 
                 for md_file in md_files:
-                    rel_key = str(md_file.relative_to(ws_path))
+                    # v0.6.1: kunci hash & folder Drive memakai path yang
+                    # sudah dirapikan (workspace/goals/ -> goals/).
+                    rel_parts = self._drive_rel_parts(md_file, ws_path)
+                    rel_key = "/".join(rel_parts)
                     curr_hash = self._sha256_file(md_file)
                     if not curr_hash:
                         continue
@@ -455,7 +472,6 @@ class DriveSyncBridge:
 
                     # Pastikan struktur subfolder di Drive
                     target_parent_id = ws_folder_id
-                    rel_parts = md_file.relative_to(ws_path).parts
                     for sub_name in rel_parts[:-1]:
                         target_parent_id = self._get_or_create_folder(sub_name, parent_id=target_parent_id)
 

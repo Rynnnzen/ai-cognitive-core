@@ -1,0 +1,1 @@
+{"background_color":"#FFFDF7","description":"Dashboard memori agent — status kognitif, graf memori, dan pembaca memori Markdown.","display":"standalone","icons":[{"purpose":"any","sizes":"any","src":"/static/icon.svg","type":"image/svg+xml"}],"lang":"id","name":"Agent Memory Dashboard","scope":"/","short_name":"AgentDash","start_url":"/","theme_color":"#FFFDF7"}

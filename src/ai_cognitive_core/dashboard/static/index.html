@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#FFFDF7" />
+  <meta name="description" content="Dashboard memori agent — status kognitif, graf memori, dan pembaca memori Markdown." />
+  <title>Agent Memory Dashboard</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg" />
+  <link rel="apple-touch-icon" href="/static/icon.svg" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/styles.css" />
+
+  <!-- CDN libraries: graph + markdown renderer -->
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>
+        <span class="crayon-word pink">Agent</span>
+        <span class="crayon-word cyan">Memory</span>
+        <span class="crayon-word yellow">Dashboard</span>
+      </h1>
+      <p class="app-subtitle">Kondisi kognitif, graf memori, dan catatan — semua di satu tempat.</p>
+      <div class="sync-badge-wrap">
+        <span id="drive-sync-badge" class="badge off">
+          <span class="dot"></span><span id="drive-sync-text">Sinkronisasi Drive: memeriksa…</span>
+        </span>
+      </div>
+    </header>
+
+    <!-- ======================= Status Bar ======================= -->
+    <section aria-label="Status kognitif">
+      <h2 class="section-title"><span class="marker pink"></span>Status</h2>
+      <div class="status-grid">
+        <div class="card" id="mood-card">
+          <div class="mood-row" id="mood-chips">
+            <span class="mood-chip plain">Memuat status…</span>
+          </div>
+          <p class="status-meta" id="status-meta"></p>
+          <h3 class="subsection-title">Energi</h3>
+          <div class="bar-row">
+            <label for="energy-bar">Energi</label>
+            <div class="bar-track"><div id="energy-bar" class="bar-fill yellow" style="width: 0%"></div></div>
+            <span class="bar-value" id="energy-value">–</span>
+          </div>
+          <p class="status-meta" id="circadian-text"></p>
+          <div class="heartbeat-box" id="heartbeat-box">Ringkasan heartbeat akan muncul di sini.</div>
+        </div>
+
+        <div class="card">
+          <h3 class="subsection-title">Neurokimia / Hormon</h3>
+          <div id="neuro-bars">
+            <div class="bar-row">
+              <label>Kortisol</label>
+              <div class="bar-track"><div class="bar-fill orange" data-neuro="cortisol" style="width: 0%"></div></div>
+              <span class="bar-value" data-neuro-value="cortisol">–</span>
+            </div>
+            <div class="bar-row">
+              <label>Oksitosin</label>
+              <div class="bar-track"><div class="bar-fill pink" data-neuro="oxytocin" style="width: 0%"></div></div>
+              <span class="bar-value" data-neuro-value="oxytocin">–</span>
+            </div>
+            <div class="bar-row">
+              <label>Dopamin</label>
+              <div class="bar-track"><div class="bar-fill yellow" data-neuro="dopamine" style="width: 0%"></div></div>
+              <span class="bar-value" data-neuro-value="dopamine">–</span>
+            </div>
+            <div class="bar-row">
+              <label>Serotonin</label>
+              <div class="bar-track"><div class="bar-fill cyan" data-neuro="serotonin" style="width: 0%"></div></div>
+              <span class="bar-value" data-neuro-value="serotonin">–</span>
+            </div>
+            <div class="bar-row">
+              <label>Noradrenalin</label>
+              <div class="bar-track"><div class="bar-fill purple" data-neuro="noradrenaline" style="width: 0%"></div></div>
+              <span class="bar-value" data-neuro-value="noradrenaline">–</span>
+            </div>
+          </div>
+          <h3 class="subsection-title">PAD (saat ini)</h3>
+          <div id="pad-bars">
+            <div class="bar-row">
+              <label>Pleasure</label>
+              <div class="bar-track"><div class="bar-fill green" data-pad="P" style="width: 0%"></div></div>
+              <span class="bar-value" data-pad-value="P">–</span>
+            </div>
+            <div class="bar-row">
+              <label>Arousal</label>
+              <div class="bar-track"><div class="bar-fill orange" data-pad="A" style="width: 0%"></div></div>
+              <span class="bar-value" data-pad-value="A">–</span>
+            </div>
+            <div class="bar-row">
+              <label>Dominance</label>
+              <div class="bar-track"><div class="bar-fill purple" data-pad="D" style="width: 0%"></div></div>
+              <span class="bar-value" data-pad-value="D">–</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= Memory Graph ======================= -->
+    <section aria-label="Graf memori">
+      <h2 class="section-title"><span class="marker cyan"></span>Graf Memori</h2>
+      <div class="card graph-wrap">
+        <div class="graph-toolbar">
+          <button class="btn small secondary" id="graph-refresh" type="button">Muat ulang graf</button>
+          <span class="graph-hint">Klik sebuah node untuk melihat detailnya. Seret untuk menggeser, gulir untuk zoom.</span>
+        </div>
+        <div id="graph" role="img" aria-label="Graf interaktif episode dan entitas memori"></div>
+        <div class="legend" id="graph-legend"></div>
+        <div class="node-detail" id="node-detail" hidden>
+          <h3 id="node-detail-title">Detail node</h3>
+          <dl>
+            <dt>ID</dt><dd id="node-detail-id">–</dd>
+            <dt>Label</dt><dd id="node-detail-label">–</dd>
+            <dt>Tipe</dt><dd id="node-detail-type">–</dd>
+            <dt>Emosi</dt><dd id="node-detail-emotion">–</dd>
+            <dt>Bobot</dt><dd id="node-detail-weight">–</dd>
+            <dt>Dibuat</dt><dd id="node-detail-created">–</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= Memories ======================= -->
+    <section aria-label="Memori Markdown">
+      <h2 class="section-title"><span class="marker yellow"></span>Memori</h2>
+      <div class="memories-layout">
+        <div class="card">
+          <div class="graph-toolbar">
+            <button class="btn small secondary" id="memory-list-refresh" type="button">Muat ulang daftar</button>
+          </div>
+          <ul class="memory-list" id="memory-list">
+            <li class="empty-state">Memuat daftar memori…</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="reader-header">
+            <span class="reader-title" id="reader-title">Pilih sebuah file memori</span>
+            <span>
+              <button class="btn small" id="edit-toggle" type="button" disabled>Ubah</button>
+              <button class="btn small primary" id="save-memory" type="button" disabled>Simpan</button>
+            </span>
+          </div>
+          <div class="markdown-body" id="memory-preview">
+            <p class="empty-state">Belum ada memori yang dipilih. Klik salah satu file di daftar untuk membacanya.</p>
+          </div>
+          <textarea class="memory-editor" id="memory-editor" hidden aria-label="Editor Markdown"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <footer class="app-footer">
+      <span id="footer-version">ai_cognitive_core</span> · Dashboard memori agent
+    </footer>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

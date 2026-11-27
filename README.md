@@ -2,7 +2,7 @@
 
 Hybrid cognitive architecture **Deterministic + LLM (17 Layers)** — Heart + Conscious + Memory — as an MCP server, with cross-device state synchronization via Google Drive API v3.
 
-This snapshot is **v0.6.0 (branch `main`)** — anti-repeat heartbeat alerts + 4 PAD expansions on top of v0.5.1. For the per-version release notes, see [GitHub Releases](https://github.com/Rynnnzen/ai-cognitive-core/releases) and `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
+This snapshot is **v0.6.1 (branch `main`)** — lightweight web dashboard + Drive photo backup rules on top of v0.6.0. For the per-version release notes, see [GitHub Releases](https://github.com/Rynnnzen/ai-cognitive-core/releases) and `CHANGELOG.md`; the old patch history is in `PATCH_NOTES.md` (Indonesian).
 
 <img src="assets/agent-crayon.webp" alt="Agent, the module's mascot" width="240">
 
@@ -35,7 +35,7 @@ Then add the server to your MCP client:
 }
 ```
 
-Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`.
+Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `google-auth-oauthlib`, `PySocks`, `fastapi`, `uvicorn`.
 
 ## Features
 
@@ -54,6 +54,8 @@ Dependencies: `numpy`, `mcp<2`, `google-api-python-client`, `google-auth`, `goog
 - **Contextual emoji palettes** — emoji variety that follows the mood and bubble style.
 - **Google Drive sync** — state (`heart_state.json`, `cognitive_memory.db`) syncs across devices via Drive API v3.
 - **5 MCP tools** — perceive, commit, sleep cycle, status, and persona configuration.
+- **Lightweight web dashboard (v0.6.1)** — a local FastAPI dashboard (`src/ai_cognitive_core/dashboard/`, mobile-first PWA) that replaces the need for an external Markdown viewer: live cognitive status bar (PAD expansion, neurochemical bars, energy, circadian phase, heartbeat, last Drive sync), an interactive memory graph (episodes + entities), and a Markdown memory reader/editor. Runs on `127.0.0.1` only — do not expose publicly.
+- **Drive photo backup rules (v0.6.1)** — daily/general photos are no longer bulk-backed-up to Drive; only character sheets / main visual-style references (`ref_keep/`), memorable photos in dedicated `memorable/` or `favorites/` subfolders, and avatar candidates are synced (see `DRIVE_PHOTOS_*` in `config.py`). Goal files under `workspace/goals/` now map to `goals/` in Drive instead of duplicating the `workspace/` folder.
 
 ## The 17-Layer Architecture
 
@@ -234,13 +236,14 @@ ai-cognitive-core/
 ├── README.md               — this document
 ├── LICENSE                 — MIT License
 ├── PATCH_NOTES.md          — patch history (v0.4.0, Indonesian)
-├── CHANGELOG.md            — changelog (v0.6.0)
+├── CHANGELOG.md            — changelog (v0.6.1)
 ├── pyproject.toml          — package metadata + dependencies
-├── tests/                  — test suite v0.6.0 (77 tests)
+├── tests/                  — test suite v0.6.1 (103 tests)
 │   ├── test_v040.py
 │   ├── test_v050.py
 │   ├── test_v051.py
-│   └── test_v060.py
+│   ├── test_v060.py
+│   └── test_v061_dashboard.py
 ├── assets/                 — README images
 │   ├── arsitektur-17-layer.webp
 │   ├── agent-crayon.webp
@@ -256,7 +259,11 @@ ai-cognitive-core/
         ├── mcp_server.py       — FastMCP server + 5 tools
         ├── drive_bridge.py     — Google Drive sync (OAuth)
         ├── schemas.py          — shared data schemas
-        ├── config.py           — v0.6.0 parameters in one place
+        ├── config.py           — v0.6.1 parameters in one place
+        ├── dashboard/          — lightweight web dashboard (v0.6.1)
+        │   ├── app.py          — FastAPI endpoints (/api/status, /api/graph, /api/memories, /api/memory)
+        │   ├── helpers.py      — safe read-only helpers (heart state, memory DB, Markdown files)
+        │   └── static/         — Colorful Crayon UI + PWA (index.html, app.js, styles.css, manifest.json)
         ├── conscious/
         │   ├── cycle.py        — cognitive cycle orchestrator
         │   ├── schemas.py

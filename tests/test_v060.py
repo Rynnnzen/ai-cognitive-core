@@ -401,7 +401,7 @@ class TestV060Compat(unittest.TestCase):
         self.assertEqual(restored.last_pad_delta["direction"], "warming_up")
 
     def test_version_is_060(self):
-        self.assertEqual(__version__, "0.6.0")
+        self.assertEqual(__version__, "0.6.1")
         self.assertTrue(config.ENABLE_PAD_EXPANSION)
 
 
@@ -420,7 +420,7 @@ class TestV060MCPStatus(unittest.TestCase):
     def test_get_status_has_v060(self):
         ms = self.ms
         st = json.loads(ms.cognitive_get_status())
-        self.assertEqual(st["v060"]["core_version"], "0.6.0")
+        self.assertEqual(st["v060"]["core_version"], "0.6.1")
         pe = st["v060"]["pad_expansion"]
         for key in ("pad_magnitude", "mood_intensity", "emotional_nuance",
                     "pad_trajectory", "high_pleasure_streak"):
