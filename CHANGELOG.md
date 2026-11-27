@@ -2,19 +2,19 @@
 
 ## [0.6.1] - 2026-11-28
 
-Rilis **v0.6.1** — dashboard web ringan (pengganti Obsidian) + aturan seleksi backup foto/media Drive. Tetap mempertahankan arsitektur 3 pilar (`memory`, `heart`, `conscious`), kontrak 5 tool MCP, dan kompatibilitas penuh dengan `heart_state.json` dan database yang sudah ada (tanpa migrasi).
+Release **v0.6.1** — lightweight web dashboard (Obsidian replacement) + Drive photo/media backup selection rules. Keeps the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the existing `heart_state.json` and database (no migration).
 
-### Dashboard Web Ringan (`src/ai_cognitive_core/dashboard/`)
-- **Helper aman (`dashboard/helpers.py`):** baca read-only untuk `heart_state.json` dan `cognitive_memory.db` (SQLite dibuka `mode=ro`, tidak pernah ditulis), serta baca-tulis terarah ke folder Markdown memori dengan validasi path ketat (menolak path absolut, `..`, dan path di luar direktori memori yang diizinkan). Path dikonfigurasi lewat environment variable (`COGNITIVE_STATE_DIR`, `COGNITIVE_WORKSPACE_DIR`) dengan default aman — tanpa hardcode path lokal tertentu.
-- **Info sinkronisasi Drive terakhir:** dibaca dari `sync_meta.json` beserta selisih waktunya (`ago_seconds` + `ago_human` berbahasa Indonesia).
-- **Endpoint FastAPI (`dashboard/app.py`):** `GET /` (menyajikan UI statis), `GET /api/status` (kondisi kognitif + PAD expansion + sinkronisasi Drive), `GET /api/graph` (episode & entitas), `GET /api/memories` (daftar file Markdown), `GET /api/memory?path=...` (baca satu file), `PUT /api/memory` (tulis satu file, validasi path ketat). Dashboard bersifat lokal saja (bind `127.0.0.1`, tanpa auth) — jangan diekspos ke publik.
-- **UI Colorful Crayon + PWA (`dashboard/static/`):** antarmuka responsif mobile-first, latar kertas krem hangat (`#FFFDF7` / `#FAF3E3`), aksen krayon warna-warni, `manifest.json` untuk Add to Home Screen. Status Bar kondisi kognitif (PAD expansion, 5 bar neurochemical, energi, fase sirkadian, heartbeat, badge sinkronisasi Drive), Interactive Memory Graph (`vis-network`, warna node per emosi, ukuran per bobot memori, panel detail saat diklik), serta Markdown Memory Reader & Editor.
-- **Dependensi baru:** `fastapi`, `uvicorn` (ditambahkan ke `pyproject.toml`).
-- **Tes:** suite baru `tests/test_v061_dashboard.py`.
+### Lightweight Web Dashboard (`src/ai_cognitive_core/dashboard/`)
+- **Safe helpers (`dashboard/helpers.py`):** read-only access to `heart_state.json` and `cognitive_memory.db` (SQLite opened with `mode=ro`, never written), plus scoped read/write to the Markdown memory folder with strict path validation (rejects absolute paths, `..`, and paths outside the allowed memory directories). Paths are configured through environment variables (`COGNITIVE_STATE_DIR`, `COGNITIVE_WORKSPACE_DIR`) with safe defaults — no hardcoded local paths.
+- **Last Drive sync info:** read from `sync_meta.json` together with how long ago it was (`ago_seconds` + `ago_human` in Indonesian).
+- **FastAPI endpoints (`dashboard/app.py`):** `GET /` (serves the static UI), `GET /api/status` (cognitive condition + PAD expansion + Drive sync), `GET /api/graph` (episodes & entities), `GET /api/memories` (Markdown file list), `GET /api/memory?path=...` (read one file), `PUT /api/memory` (write one file, strict path validation). The dashboard is local-only (binds `127.0.0.1`, no auth) — do not expose it publicly.
+- **Colorful Crayon UI + PWA (`dashboard/static/`):** responsive mobile-first interface, warm cream paper background (`#FFFDF7` / `#FAF3E3`), colorful crayon accents, `manifest.json` for Add to Home Screen. Cognitive status bar (PAD expansion, 5 neurochemical bars, energy, circadian phase, heartbeat, last Drive sync badge), Interactive Memory Graph (`vis-network`, node color by emotion, node size by memory weight, detail panel on click), plus a Markdown Memory Reader & Editor.
+- **New dependencies:** `fastapi`, `uvicorn` (added to `pyproject.toml`).
+- **Tests:** new suite `tests/test_v061_dashboard.py`.
 
-### Aturan Seleksi Backup Foto/Media Drive (`config.py`, `drive_bridge.py`, `backup_photos_to_mcp_drive.py`)
-- Foto harian/umum **tidak** ikut backup otomatis ke Drive (`photos/`). Hanya: (a) character sheet & aset referensi gaya visual utama (`ref_keep/`) saat ada perubahan model/art style; (b) foto momen berkesan di subfolder khusus `memorable/` atau `favorites/`; (c) kandidat avatar (`avatars/`). Aturan dicatat di `config.py` (`DRIVE_PHOTOS_*`) dan ditegakkan oleh skrip backup.
-- **Rapikan `workspace_md/` (`drive_bridge.py`):** file goal yang tinggal di `workspace/goals/` kini dipetakan ke `goals/` (awalan `workspace/` dibuang) supaya Drive tidak punya subfolder `workspace/` yang mengulang `goals/`; folder duplikat lama di Drive sudah dihapus (isinya tersimpan lokal dan akan re-sync sekali ke lokasi baru).
+### Drive Photo/Media Backup Selection Rules (`config.py`, `drive_bridge.py`, `backup_photos_to_mcp_drive.py`)
+- Daily/general photos are **not** auto-backed-up to Drive (`photos/`). Only: (a) character sheets & main visual-style reference assets (`ref_keep/`) when the model or art style changes; (b) truly memorable photos in dedicated subfolders `memorable/` or `favorites/`; (c) avatar candidates (`avatars/`). The rules live in `config.py` (`DRIVE_PHOTOS_*`) and are enforced by the backup script.
+- **Tidy up `workspace_md/` (`drive_bridge.py`):** goal files under `workspace/goals/` now map to `goals/` (the `workspace/` prefix is dropped) so Drive no longer has a `workspace/` subfolder duplicating `goals/`; the old duplicate folder in Drive has been deleted (its contents are stored locally and will re-sync once to the new location).
 
 ## [0.6.0] - 2026-11-25
 
