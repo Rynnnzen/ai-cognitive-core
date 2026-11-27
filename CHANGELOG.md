@@ -11,6 +11,7 @@ Release **v0.6.1** — lightweight web dashboard + Drive photo/media backup sele
 - **Colorful Crayon UI + PWA (`dashboard/static/`):** responsive mobile-first interface, warm cream paper background (`#FFFDF7` / `#FAF3E3`), colorful crayon accents, `manifest.json` for Add to Home Screen. Cognitive status bar (PAD expansion, 5 neurochemical bars, energy, circadian phase, heartbeat, last Drive sync badge), Interactive Memory Graph (`vis-network`, node color by emotion, node size by memory weight, detail panel on click), plus a Markdown Memory Reader & Editor.
 - **New dependencies:** `fastapi`, `uvicorn` (added to `pyproject.toml`).
 - **Tests:** new suite `tests/test_v061_dashboard.py`.
+- **Fix (post-release):** the static UI was mounted at `/`, which made every `/static/*` URL (styles, app JS, manifest, icon) return 404 — the page loaded unstyled with no data. Mounted at `/static` with an explicit `GET /` serving `index.html`; added a regression test (`test_static_ui_served`).
 
 ### Drive Photo/Media Backup Selection Rules (`config.py`, `drive_bridge.py`, `backup_photos_to_mcp_drive.py`)
 - Daily/general photos are **not** auto-backed-up to Drive (`photos/`). Only: (a) character sheets & main visual-style reference assets (`ref_keep/`) when the model or art style changes; (b) truly memorable photos in dedicated subfolders `memorable/` or `favorites/`; (c) avatar candidates (`avatars/`). The rules live in `config.py` (`DRIVE_PHOTOS_*`) and are enforced by the backup script.

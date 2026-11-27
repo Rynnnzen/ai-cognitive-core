@@ -41,12 +41,13 @@ from ai_cognitive_core.dashboard import helpers
 
 try:
     from fastapi import FastAPI, Request
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import FileResponse, JSONResponse
     from fastapi.staticfiles import StaticFiles
 except ImportError as _fastapi_import_error:  # FastAPI is optional for the core.
     _FASTAPI_IMPORT_ERROR = _fastapi_import_error
     FastAPI = None  # type: ignore[assignment]
     Request = None  # type: ignore[assignment]
+    FileResponse = None  # type: ignore[assignment]
     JSONResponse = None  # type: ignore[assignment]
     StaticFiles = None  # type: ignore[assignment]
 
@@ -159,11 +160,16 @@ def create_app(
             return JSONResponse(status_code=400, content={"detail": str(exc)})
         return JSONResponse(status_code=200, content=result)
 
-    # The static UI is mounted last so the explicit /api/* routes above
-    # always win over the catch-all static mount.
+    # The static UI is mounted at /static (matching the /static/* URLs in
+    # index.html); GET / serves index.html explicitly. The /api/* routes
+    # above are registered first, so they always win over the static mount.
     static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.is_dir():
-        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+        @app.get("/")
+        def ui_index() -> "FileResponse":
+            return FileResponse(static_dir / "index.html")
     else:
 
         @app.get("/")

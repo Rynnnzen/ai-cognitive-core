@@ -401,6 +401,26 @@ class TestDashboardHttp(unittest.TestCase):
         self.assertTrue(STATUS_KEYS.issubset(resp.json().keys()))
         self.assertEqual(resp.json()["core_version"], "0.6.1")
 
+    def test_static_ui_served(self):
+        # GET / serves the dashboard HTML; the /static/* URLs used by
+        # index.html must resolve (regression: mounting StaticFiles at "/"
+        # made every /static/* URL 404).
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/html", resp.headers.get("content-type", ""))
+        self.assertIn("Memory Dashboard", resp.text)
+        for asset in (
+            "/static/styles.css",
+            "/static/app.js",
+            "/static/manifest.json",
+            "/static/icon.svg",
+        ):
+            asset_resp = self.client.get(asset)
+            self.assertEqual(asset_resp.status_code, 200, msg=asset)
+        css = self.client.get("/static/styles.css").text
+        self.assertIn("#fffdf7", css.lower())
+        self.assertIn("Agent Memory Dashboard", self.client.get("/static/app.js").text)
+
     def test_get_graph(self):
         resp = self.client.get("/api/graph")
         self.assertEqual(resp.status_code, 200)
