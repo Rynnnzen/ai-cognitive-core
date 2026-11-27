@@ -2,7 +2,7 @@
 
 ## [0.6.1] - 2026-11-28
 
-Release **v0.6.1** — lightweight web dashboard (Obsidian replacement) + Drive photo/media backup selection rules. Keeps the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the existing `heart_state.json` and database (no migration).
+Release **v0.6.1** — lightweight web dashboard + Drive photo/media backup selection rules. Keeps the 3-pillar architecture (`memory`, `heart`, `conscious`), the 5-tool MCP contract, and full compatibility with the existing `heart_state.json` and database (no migration).
 
 ### Lightweight Web Dashboard (`src/ai_cognitive_core/dashboard/`)
 - **Safe helpers (`dashboard/helpers.py`):** read-only access to `heart_state.json` and `cognitive_memory.db` (SQLite opened with `mode=ro`, never written), plus scoped read/write to the Markdown memory folder with strict path validation (rejects absolute paths, `..`, and paths outside the allowed memory directories). Paths are configured through environment variables (`COGNITIVE_STATE_DIR`, `COGNITIVE_WORKSPACE_DIR`) with safe defaults — no hardcoded local paths.

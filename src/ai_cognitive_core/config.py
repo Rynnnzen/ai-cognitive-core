@@ -207,7 +207,7 @@ DRIVE_PHOTOS_AVATAR_DIR = "avatars"
 DRIVE_PHOTOS_DAILY_SOURCE_DIR = "imagine_media"
 
 # ---------------------------------------------------------------------------
-# Parameter v0.6.1 — Dashboard web ringan (pengganti Obsidian)
+# Parameter v0.6.1 — Dashboard web ringan
 # Endpoint FastAPI di dashboard/; UI statis di dashboard/static/.
 # Dashboard bersifat lokal saja (bind 127.0.0.1, tanpa auth) — jangan
 # diekspos ke publik. Port bisa diubah lewat COGNITIVE_DASHBOARD_PORT.
